@@ -1,0 +1,9 @@
+name: split_c3dmat_to_cycles
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pyqt
+  - pyqt5
+  - numpy
+  - scipy
