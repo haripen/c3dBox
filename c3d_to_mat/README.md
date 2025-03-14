@@ -1,19 +1,19 @@
 # C3D to MAT Converter
 
-This project provides a GUI tool to convert C3D files into MATLAB MAT files using PyQt5. It features a streamlined interface for selecting input and output folders, filtering data, and enriching MAT files with metadata, events, point, and analog data.
+This GUI or script convert C3D files into MATLAB MAT files using ezC3D and PyQt5. It features an interface for selecting input and output folders, filtering data, and enriching MAT files with metadata, events, point, and analog data.
 
 ---
 
 ## Features
 
-- **Intuitive GUI**: Modern PyQt5 interface with intuitive controls and helpful tooltips.
-- **Flexible Filtering:** Choose a filter mode (e.g., by file attributes or filename) and apply custom keywords for targeted file selection.
-- **JSON-Based Filters:** Automatically or manually load filter definitions from JSON files for precise data selection.
+- **GUI**: PyQt5 interface with controls and helpful tooltips.
+- **File Filtering:** Choose a filter mode (e.g., by file attributes or filename) and apply custom keywords for targeted file selection.
+- **JSON-Based Data-Export Filters:** Automatically or manually load filter definitions from JSON files for precise data selection.
 - **Meta Data Integration:** Includes detailed metadata such as sampling rates, frame ranges, and complete file headers.
 - **Structured Data Export:**
-  - **Events:** Exported in character arrays compatible with MATLAB.
+  - **Events:** Exported in character arrays.
   - **Point and Analog Data:** Organized clearly with unique, MATLAB-friendly field names and filtered according to user criteria.
-- **Logging Support:** Optional detailed logging of raw data labels for debugging.
+- **Logging Support:** Optional detailed logging of raw data labels for setting up the JSON or for debugging.
 
 ---
 
@@ -44,7 +44,7 @@ dependencies:
 
 ## Creating an Executable
 
-To distribute a standalone executable using PyInstaller with UPX compression:
+To distribute a standalone executable using PyInstaller with UPX compression (just download and extract UPX to a folder):
 
 ```bash
 pyinstaller --onefile --windowed --upx-dir "C:\upx-5.0.0-win64" c3d_to_mat_pyqt.py
@@ -97,7 +97,7 @@ Example JSON format for filtering:
 }
 ```
 
-Customize this format to match your specific filtering criteria.
+Customize the lists to match your specific filtering criteria.
 
 ---
 
