@@ -2,6 +2,10 @@
 
 This GUI or script convert C3D files into MATLAB MAT files using ezC3D and PyQt5. It features an interface for selecting input and output folders, filtering data, and enriching MAT files with metadata, events, point, and analog data.
 
+Use this line after importing a .mat file to convert event labels to a Matlab cell string.
+```matlab
+events.event_labels = cellstr(events.event_labels);
+```
 ---
 
 ## Features
