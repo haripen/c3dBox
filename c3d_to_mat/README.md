@@ -1,0 +1,116 @@
+# C3D to MAT Converter
+
+This project provides a GUI tool to convert C3D files into MATLAB MAT files using PyQt5. It features a streamlined interface for selecting input and output folders, filtering data, and enriching MAT files with metadata, events, point, and analog data.
+
+---
+
+## Features
+
+- **Intuitive GUI**: Modern PyQt5 interface with intuitive controls and helpful tooltips.
+- **Flexible Filtering:** Choose a filter mode (e.g., by file attributes or filename) and apply custom keywords for targeted file selection.
+- **JSON-Based Filters:** Automatically or manually load filter definitions from JSON files for precise data selection.
+- **Meta Data Integration:** Includes detailed metadata such as sampling rates, frame ranges, and complete file headers.
+- **Structured Data Export:**
+  - **Events:** Exported in character arrays compatible with MATLAB.
+  - **Point and Analog Data:** Organized clearly with unique, MATLAB-friendly field names and filtered according to user criteria.
+- **Logging Support:** Optional detailed logging of raw data labels for debugging.
+
+---
+
+## Environment Setup
+
+Use the provided YAML file to set up the environment with Conda:
+
+```bash
+conda env create -f c3d_to_mat.yml
+conda activate c3d_to_mat
+```
+
+YAML Example:
+
+```yml
+name: c3d_to_mat
+channels:
+- conda-forge
+dependencies:
+- python=3.8
+- pyqt
+- pyqt5
+- numpy
+- scipy
+- ezc3d
+- pyinstaller
+```
+
+## Creating an Executable
+
+To distribute a standalone executable using PyInstaller with UPX compression:
+
+```bash
+pyinstaller --onefile --windowed --upx-dir "C:\upx-5.0.0-win64" c3d_to_mat_pyqt.py
+```
+
+---
+
+## Usage
+
+Run the executable directly or via:
+
+```bash
+python c3d_to_mat_pyqt.py
+```
+
+or run the script version
+
+```bash
+python c3d_to_mat
+```
+
+Steps:
+
+1. Select Input/Output Folders:
+   Use "Browse" to select the folders for source C3D files and the output location for MAT files.
+
+2. Filtering Options:
+   
+   - Select the filter method (e.g., by filename or description).
+   - Enter keywords to refine selection.
+
+3. Load JSON Filter (optional):
+   Use the settings menu to load a custom JSON filter file.
+
+4. Conversion:
+   Click "Run Conversion" to start processing. Monitor progress in the log.
+
+---
+
+## JSON Filter Format
+
+Example JSON format for filtering:
+
+```json
+{
+  "meta": [],
+  "event": [],
+  "analog": ["Label1", "Label2"],
+  "point": ["Label3", "Label4"]
+}
+```
+
+Customize this format to match your specific filtering criteria.
+
+---
+
+## Credits & License
+
+- Author: Harald Penasso with ChatGPT assistance  
+- License: MIT License
+
+Dependencies:
+
+- PyQt5
+- ezc3d
+- numpy
+- scipy
+
+Contributions through issues or pull requests are welcome!

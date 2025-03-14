@@ -1,0 +1,535 @@
+#!/usr/bin/env python3
+"""
+PyQt5 C3D to MAT Converter
+---------------------------
+This is a PyQt5-based GUI tool for converting C3D files to MATLAB MAT files.
+It reuses conversion functions from your existing c3d_to_mat.py script.
+
+Features:
+  - Choose source and output folders.
+  - Select filter type (default "enf") with dynamic explanation for keywords.
+  - Option to print raw point/analog labels (displayed in 9pt in the log).
+  - Automatically loads a filtering dictionary from data_filter.json if present.
+  - You can load a different JSON via the Settings menu.
+  - Meta data is enriched with point_rate, analog_rate, analog_first, analog_last, and the full C3D header.
+  - Info menu shows credits, author, date, and MIT license info.
+
+Author: Harald Penasso with ChatGPT assistance  
+Date: 2025-03-14  
+License: MIT License  
+Packages used: PyQt5, ezc3d, numpy, scipy
+"""
+
+import os, sys, json, re, numpy as np, ezc3d
+from datetime import datetime
+from PyQt5 import QtWidgets, QtCore, QtGui
+from scipy.io import savemat
+
+# Global flag for printing labels.
+PRINT_LABELS = False
+# Global logger (will be set by the UI)
+logger = print
+
+# Attempt to load default filtering dictionary from "data_filter.json" automatically.
+if os.path.exists("data_filter.json"):
+    try:
+        with open("data_filter.json", "r") as f:
+            data_filter_dict = json.load(f)
+        print("Automatically loaded data_filter_dict from data_filter.json")
+    except Exception as e:
+        print("Error loading data_filter.json, using default:", e)
+        data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
+else:
+    print("data_filter.json not found. Using default empty filter dict.")
+    data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
+
+# -------------------------------
+# Conversion Functions (reused from c3d_to_mat.py)
+# -------------------------------
+
+def extract_event_times_and_labels(c3d_path):
+    c3d_file = ezc3d.c3d(c3d_path)
+    try:
+        event_times = c3d_file['parameters']['EVENT']['TIMES']['value'][1]
+        event_labels = c3d_file['parameters']['EVENT']['LABELS']['value']
+        event_contexts = c3d_file['parameters']['EVENT']['CONTEXTS']['value']
+        for i, ctx in enumerate(event_contexts):
+            event_labels[i] = ctx + ' ' + event_labels[i]
+        events = sorted(zip(event_times, event_labels))
+        if events:
+            sorted_times, sorted_labels = zip(*events)
+        else:
+            sorted_times, sorted_labels = [], []
+    except Exception as e:
+        logger(f"Warning: could not extract events from {c3d_path}: {e}")
+        sorted_times, sorted_labels = [], []
+    trimmed_labels = [lab.strip() for lab in sorted_labels]
+    if trimmed_labels:
+        max_len = max(len(lab) for lab in trimmed_labels)
+        padded = np.array([list(lab.ljust(max_len)) for lab in trimmed_labels])
+    else:
+        padded = np.empty((0,0))
+    return {"event_times": list(sorted_times), "event_labels": padded}
+
+def process_field_label(label):
+    label = label.strip()
+    tokens = re.split(r'[ \._]+', label)
+    tokens = [t for t in tokens if t]
+    new_tokens = []
+    for token in tokens:
+        if not new_tokens or token.lower() != new_tokens[-1].lower():
+            new_tokens.append(token)
+    candidate = "_".join(new_tokens)
+    return candidate
+
+def get_unique_field_label(raw_label, used_labels):
+    candidate = process_field_label(raw_label)
+    if len(candidate) > 31:
+        tokens = re.split(r'[_]+', candidate)
+        tokens = [token[:3] for token in tokens]
+        candidate = "_".join(tokens)
+    original_candidate = candidate
+    suffix = 1
+    while candidate in used_labels:
+        suffix_str = f"_{suffix}"
+        if len(original_candidate) + len(suffix_str) > 31:
+            candidate = original_candidate[:31 - len(suffix_str)] + suffix_str
+        else:
+            candidate = original_candidate + suffix_str
+        suffix += 1
+    used_labels.add(candidate)
+    return candidate
+
+def find_enf_file(c3d_path):
+    folder = os.path.dirname(c3d_path)
+    c3d_base = os.path.splitext(os.path.basename(c3d_path))[0].lower()
+    for file in os.listdir(folder):
+        if file.lower().endswith(".enf"):
+            candidate_base = os.path.splitext(file)[0].replace(".Trial", "").lower()
+            if candidate_base == c3d_base:
+                return os.path.join(folder, file)
+    return None
+
+def parse_forceplate_validity(enf_path):
+    fp_validity = {}
+    try:
+        with open(enf_path, 'r') as f:
+            for line in f:
+                m = re.match(r'^(FP\d{1,2})\s*=\s*(.+)', line)
+                if m:
+                    key = m.group(1).strip()
+                    value = m.group(2).strip()
+                    fp_validity[key] = value
+    except Exception as e:
+        logger(f"Error parsing forceplate validity from {enf_path}: {e}")
+    return fp_validity
+
+def get_unique_mp_basenames(folder):
+    files = os.listdir(folder)
+    mp_files = [f for f in files if f.lower().endswith(".mp") or f.lower().endswith(".vsk")]
+    basenames = {}
+    for f in mp_files:
+        base = os.path.splitext(f)[0].strip()
+        basenames.setdefault(base, []).append(f)
+    return basenames
+
+def get_mp_info(folder):
+    basenames = get_unique_mp_basenames(folder)
+    if not basenames:
+        return {}
+    if len(basenames) > 1:
+        logger("Error: Multiple unique MP/VSK file sets detected in folder:")
+        for base, files in basenames.items():
+            logger(f"  {base}: {files}")
+        logger("Please remove all additional MP/VSK file sets and try again.")
+        sys.exit(1)
+    mp_info = {}
+    for base, files in basenames.items():
+        for f in files:
+            path = os.path.join(folder, f)
+            info = parse_mp_file(path)
+            mp_info.update(info)
+    return mp_info
+
+def parse_mp_file(mp_path):
+    mp_params = {}
+    try:
+        with open(mp_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("$"):
+                    parts = line[1:].split("=", 1)
+                    if len(parts) == 2:
+                        key = parts[0].strip()
+                        value = parts[1].strip()
+                        mp_params[key] = value
+    except Exception as e:
+        logger(f"Error parsing MP file {mp_path}: {e}")
+    return mp_params
+
+def filter_dict_by_keywords(data_dict, keywords):
+    if not keywords:
+        return data_dict
+    filtered = {}
+    for key, value in data_dict.items():
+        for kw in keywords:
+            if kw.lower() in key.lower():
+                filtered[key] = value
+                break
+    return filtered
+
+def filter_list_by_keywords(data_list, keywords):
+    if not keywords:
+        return data_list
+    return [item for item in data_list if any(kw.lower() in item.lower() for kw in keywords)]
+
+def process_c3d_file(c3d_path, data_filter_dict):
+    logger(f"Processing {c3d_path} ...")
+    c3d_file = ezc3d.c3d(c3d_path)
+    meta = {}
+    for key in c3d_file['parameters']:
+        if key.upper() in ['SUBJECT', 'PROCESSING', 'FORCE_PLATFORM']:
+            meta[key] = c3d_file['parameters'][key]
+    if "PROCESSING" in meta and isinstance(meta["PROCESSING"], dict):
+        for proc_key in list(meta["PROCESSING"].keys()):
+            item = meta["PROCESSING"][proc_key]
+            if isinstance(item, dict) and "value" in item:
+                meta["PROCESSING"][proc_key] = item["value"]
+    enf_path = find_enf_file(c3d_path)
+    if enf_path:
+        fp_validity = parse_forceplate_validity(enf_path)
+        if fp_validity:
+            if "FORCE_PLATFORM" in meta and isinstance(meta["FORCE_PLATFORM"], dict):
+                meta["FORCE_PLATFORM"]["VALID"] = fp_validity
+            else:
+                meta["FORCE_PLATFORM"] = {"VALID": fp_validity}
+    else:
+        logger(f"Warning: No matching ENF file found for {c3d_path}.")
+    folder = os.path.dirname(c3d_path)
+    mp_info = get_mp_info(folder)
+    if mp_info:
+        processing_keys = set()
+        if "PROCESSING" in c3d_file['parameters']:
+            processing_keys = set(c3d_file['parameters']['PROCESSING'].keys())
+        filtered_mp_info = {key: value for key, value in mp_info.items() if key not in processing_keys}
+        if filtered_mp_info:
+            meta["mp_info"] = filtered_mp_info
+    meta = filter_dict_by_keywords(meta, data_filter_dict.get("meta", []))
+    point_rate = c3d_file['parameters']['POINT']['RATE']['value'][0]
+    analog_rate = c3d_file['parameters']['ANALOG']['RATE']['value'][0]
+    analog_first = c3d_file['header']['analogs']['first_frame']
+    analog_last = c3d_file['header']['analogs']['last_frame']
+    meta["point_rate"] = point_rate
+    meta["analog_rate"] = analog_rate
+    meta["analog_first"] = analog_first
+    meta["analog_last"] = analog_last
+    meta["header"] = c3d_file.get("header", {})
+
+    events = extract_event_times_and_labels(c3d_path)
+    ev_keywords = data_filter_dict.get("events", [])
+    if ev_keywords:
+        filtered_times = []
+        filtered_labels = []
+        for t, lab in zip(events["event_times"], events["event_labels"]):
+            lab_str = "".join(lab).strip()
+            if any(kw.lower() in lab_str.lower() for kw in ev_keywords):
+                filtered_times.append(t)
+                filtered_labels.append(lab_str)
+        if filtered_labels:
+            max_len = max(len(lab) for lab in filtered_labels)
+            padded = np.array([list(lab.ljust(max_len)) for lab in filtered_labels])
+        else:
+            padded = np.empty((0,0))
+        events = {"event_times": filtered_times, "event_labels": padded}
+
+    raw_point_labels = c3d_file['parameters']['POINT']['LABELS']['value']
+    if "LABELS2" in c3d_file['parameters']['POINT']:
+        raw_point_labels += c3d_file['parameters']['POINT']['LABELS2']['value']
+    points = c3d_file['data']['points'][0:3, :, :]
+    points = np.transpose(points, (2, 1, 0))
+    actual_start = c3d_file['parameters']['TRIAL']['ACTUAL_START_FIELD']['value'][0]
+    n_frames = points.shape[0]
+    frames_vector = np.arange(0, n_frames) + actual_start
+    timeC3D = frames_vector / point_rate - 1/point_rate
+    point_struct = {"time": timeC3D.tolist(), "frames": frames_vector.tolist()}
+    used_point_labels = set()
+    point_filter = data_filter_dict.get("point", [])
+    for i, lab in enumerate(raw_point_labels):
+        lab_stripped = lab.strip()
+        if lab_stripped.startswith("*"):
+            continue
+        if point_filter and not any(kw.lower() in lab_stripped.lower() for kw in point_filter):
+            continue
+        unique_label = get_unique_field_label(lab_stripped, used_point_labels)
+        point_struct[unique_label] = points[:, i, :]
+    if PRINT_LABELS:
+        logger("[label]Raw Point Labels for " + c3d_path + " : " + str(raw_point_labels))
+
+    analog_header = c3d_file['header']['analogs']
+    analog_first = analog_header['first_frame']
+    analog_last = analog_header['last_frame']
+    n_analog_frames = analog_last - analog_first + 1
+    timeAnalog = np.arange(0, n_analog_frames) / analog_rate + timeC3D[0]
+    analog_frames = np.arange(analog_first, analog_last + 1)
+    raw_analog_labels = c3d_file['parameters']['ANALOG']['LABELS']['value']
+    an_keywords = data_filter_dict.get("analog", [])
+    if an_keywords:
+        indices = [i for i, lab in enumerate(raw_analog_labels) if any(kw.lower() in lab.lower() for kw in an_keywords)]
+        raw_analog_labels = [raw_analog_labels[i] for i in indices]
+        analogue = c3d_file['data']['analogs'][0, :, :][indices, :]
+    else:
+        analogue = c3d_file['data']['analogs'][0, :, :]
+    analog_struct = {"time": timeAnalog.tolist(), "frames": analog_frames.tolist()}
+    used_analog_labels = set()
+    for i, lab in enumerate(raw_analog_labels):
+        unique_label = get_unique_field_label(lab, used_analog_labels)
+        analog_struct[unique_label] = analogue[i, :]
+    if PRINT_LABELS:
+        logger("[label]Raw Analog Labels for " + c3d_path + " : " + str(raw_analog_labels))
+
+    extracted = {
+        "meta": meta,
+        "events": events,
+        "point": point_struct,
+        "analog": analog_struct
+    }
+    return extracted
+
+def find_c3d_files(root_folder):
+    c3d_files = []
+    for dirpath, _, files in os.walk(root_folder):
+        for file in files:
+            if file.lower().endswith(".c3d"):
+                c3d_files.append(os.path.join(dirpath, file))
+    return c3d_files
+
+def file_matches_filter(c3d_path, filter_type, keywords):
+    if filter_type == "all":
+        return True
+    if filter_type == "enf":
+        enf_path = find_enf_file(c3d_path)
+        if not enf_path:
+            return False
+        description = None
+        try:
+            with open(enf_path, 'r') as f:
+                for line in f:
+                    if line.startswith('DESCRIPTION='):
+                        description = line.split('=')[1].strip().replace(' ', '_')
+                        break
+        except Exception as e:
+            logger(f"Error reading {enf_path}: {e}")
+            return False
+        if description is None:
+            return False
+        return any(description.lower().startswith(kw.lower()) for kw in keywords)
+    elif filter_type == "filename":
+        base = os.path.splitext(os.path.basename(c3d_path))[0]
+        return any(kw.lower() in base.lower() for kw in keywords)
+    else:
+        return False
+
+def process_folder(filter_type, keywords, data_filter_dict, source_root, output_root):
+    logger(f"Processing C3D files in: {source_root}")
+    logger(f"Output will be saved in: {output_root}")
+    c3d_files = find_c3d_files(source_root)
+    logger(f"Found {len(c3d_files)} C3D files.")
+    processed_count = 0
+    for file_path in c3d_files:
+        if not file_matches_filter(file_path, filter_type, keywords):
+            continue
+        extracted = process_c3d_file(file_path, data_filter_dict)
+        rel_path = os.path.relpath(os.path.dirname(file_path), source_root)
+        out_folder = os.path.join(output_root, rel_path)
+        os.makedirs(out_folder, exist_ok=True)
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        out_file = os.path.join(out_folder, base_name + ".mat")
+        savemat(out_file, extracted)
+        logger(f"Saved extracted data to {out_file}")
+        processed_count += 1
+    logger(f"Finished processing. {processed_count} files were extracted and saved.")
+
+# -------------------------------
+# PyQt5 UI Version
+# -------------------------------
+
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("C3D to MAT Converter")
+        self.resize(800, 600)
+        self.initUI()
+        self.loadDataFilterDict()
+
+    def initUI(self):
+        # Create Menu Bar with "Settings" menu
+        menubar = self.menuBar()
+        settingsMenu = menubar.addMenu("Settings")
+        loadJsonAction = QtWidgets.QAction("Load JSON", self)
+        loadJsonAction.setToolTip("Load a filtering JSON file from disk.")
+        loadJsonAction.triggered.connect(self.loadJson)
+        settingsMenu.addAction(loadJsonAction)
+        aboutAction = QtWidgets.QAction("About", self)
+        aboutAction.triggered.connect(self.showAbout)
+        settingsMenu.addAction(aboutAction)
+
+        centralWidget = QtWidgets.QWidget()
+        self.setCentralWidget(centralWidget)
+        layout = QtWidgets.QVBoxLayout()
+        centralWidget.setLayout(layout)
+
+        titleLabel = QtWidgets.QLabel("C3D to MAT Converter")
+        titleLabel.setAlignment(QtCore.Qt.AlignCenter)
+        titleLabel.setStyleSheet("font-size: 24px; font-weight: bold;")
+        layout.addWidget(titleLabel)
+
+        # Source folder
+        hboxSource = QtWidgets.QHBoxLayout()
+        self.sourceLineEdit = QtWidgets.QLineEdit()
+        self.sourceLineEdit.setPlaceholderText("Select source folder")
+        self.sourceBrowseButton = QtWidgets.QPushButton("Browse...")
+        self.sourceBrowseButton.setStyleSheet("background-color: #007BFF; color: white;")
+        self.sourceBrowseButton.setToolTip("Click to select the folder containing C3D files.")
+        self.sourceBrowseButton.clicked.connect(self.browseSource)
+        hboxSource.addWidget(QtWidgets.QLabel("Source Folder:"))
+        hboxSource.addWidget(self.sourceLineEdit)
+        hboxSource.addWidget(self.sourceBrowseButton)
+        layout.addLayout(hboxSource)
+
+        # Output folder
+        hboxOutput = QtWidgets.QHBoxLayout()
+        self.outputLineEdit = QtWidgets.QLineEdit()
+        self.outputLineEdit.setPlaceholderText("Select output folder")
+        self.outputBrowseButton = QtWidgets.QPushButton("Browse...")
+        self.outputBrowseButton.setStyleSheet("background-color: #007BFF; color: white;")
+        self.outputBrowseButton.setToolTip("Click to select the folder where MAT files will be saved.")
+        self.outputBrowseButton.clicked.connect(self.browseOutput)
+        hboxOutput.addWidget(QtWidgets.QLabel("Output Folder:"))
+        hboxOutput.addWidget(self.outputLineEdit)
+        hboxOutput.addWidget(self.outputBrowseButton)
+        layout.addLayout(hboxOutput)
+
+        # Filter type row (now above keywords)
+        hboxFilter = QtWidgets.QHBoxLayout()
+        self.filterComboBox = QtWidgets.QComboBox()
+        self.filterComboBox.addItems(["enf", "all", "filename"])  # default "enf"
+        self.filterComboBox.setToolTip("Select the filtering method:\n'enf' - filter based on ENF DESCRIPTION (default)\n'all' - process all files\n'filename' - filter based on filename.")
+        self.filterComboBox.currentIndexChanged.connect(self.updateKeywordsPlaceholder)
+        hboxFilter.addWidget(QtWidgets.QLabel("Filter Type:"))
+        hboxFilter.addWidget(self.filterComboBox)
+        layout.addLayout(hboxFilter)
+
+        # Keywords row
+        hboxKeywords = QtWidgets.QHBoxLayout()
+        self.keywordsLineEdit = QtWidgets.QLineEdit()
+        self.keywordsLineEdit.setPlaceholderText("Enter keywords for ENF description")
+        self.keywordsLineEdit.setToolTip("Keywords will be matched against the ENF DESCRIPTION if 'enf' is selected, or filename if 'filename' is selected. Ignored if filter type is 'all'.")
+        hboxKeywords.addWidget(QtWidgets.QLabel("Keywords:"))
+        hboxKeywords.addWidget(self.keywordsLineEdit)
+        layout.addLayout(hboxKeywords)
+
+        # Print labels checkbox
+        self.printCheckBox = QtWidgets.QCheckBox("Print raw point and analog labels")
+        self.printCheckBox.setToolTip("If checked, raw labels will be printed to the log in 9pt font.")
+        layout.addWidget(self.printCheckBox)
+
+        # Run conversion button
+        self.runButton = QtWidgets.QPushButton("Run Conversion")
+        self.runButton.setStyleSheet("background-color: #007BFF; color: white; font-size: 16px;")
+        self.runButton.setToolTip("Click to start the conversion process.")
+        self.runButton.clicked.connect(self.runConversion)
+        layout.addWidget(self.runButton)
+
+        # Log output
+        self.logTextEdit = QtWidgets.QTextEdit()
+        self.logTextEdit.setReadOnly(True)
+        self.logTextEdit.setStyleSheet("background-color: #f0f0f0;")
+        layout.addWidget(self.logTextEdit)
+
+    def updateKeywordsPlaceholder(self):
+        filter_type = self.filterComboBox.currentText().lower()
+        if filter_type == "enf":
+            self.keywordsLineEdit.setPlaceholderText("Enter keywords for ENF description")
+            self.keywordsLineEdit.setToolTip("Keywords will be matched against the DESCRIPTION in the ENF file.")
+        elif filter_type == "filename":
+            self.keywordsLineEdit.setPlaceholderText("Enter keywords for filename")
+            self.keywordsLineEdit.setToolTip("Keywords will be matched against the C3D filename.")
+        else:
+            self.keywordsLineEdit.setPlaceholderText("No keywords needed for 'all'")
+            self.keywordsLineEdit.setToolTip("All files will be processed; keywords are ignored.")
+
+    def loadDataFilterDict(self):
+        json_path = "data_filter.json"
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r") as f:
+                    self.data_filter_dict = json.load(f)
+                self.log(f"Automatically loaded data_filter_dict from {json_path}")
+            except Exception as e:
+                self.log(f"Error loading {json_path}: {e}. Using default empty filter dict.")
+                self.data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
+        else:
+            self.log("data_filter.json not found. Using default empty filter dict.")
+            self.data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
+
+    def loadJson(self):
+        json_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Load JSON Filter File", "", "JSON Files (*.json)")
+        if json_path:
+            try:
+                with open(json_path, "r") as f:
+                    self.data_filter_dict = json.load(f)
+                self.log(f"Loaded data_filter_dict from {json_path}")
+            except Exception as e:
+                self.log(f"Error loading {json_path}: {e}")
+        else:
+            self.log("No JSON file selected.")
+
+    def browseSource(self):
+        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Source Folder")
+        if folder:
+            self.sourceLineEdit.setText(folder)
+
+    def browseOutput(self):
+        folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Output Folder")
+        if folder:
+            self.outputLineEdit.setText(folder)
+
+    def log(self, message):
+        if message.startswith("[label]"):
+            message = message.replace("[label]", "")
+            self.logTextEdit.append(f"<span style='font-size:9pt;'>{message}</span>")
+        else:
+            self.logTextEdit.append(message)
+        print(message)
+
+    def showAbout(self):
+        about_text = (
+            "<h2>C3D to MAT Converter</h2>"
+            "<p>Author: Harald Penasso with ChatGPT assistance</p>"
+            "<p>Date: 2025-03-14</p>"
+            "<p>License: MIT License</p>"
+            "<p>Packages used: PyQt5, ezc3d, numpy, scipy</p>"
+        )
+        QtWidgets.QMessageBox.about(self, "About C3D to MAT Converter", about_text)
+
+    def runConversion(self):
+        source = self.sourceLineEdit.text().strip()
+        output = self.outputLineEdit.text().strip()
+        if not source or not output:
+            QtWidgets.QMessageBox.warning(self, "Error", "Please select both source and output folders.")
+            return
+        keywords_str = self.keywordsLineEdit.text().strip()
+        keywords = [k.strip() for k in keywords_str.split(",") if k.strip()] if keywords_str else []
+        filter_type = self.filterComboBox.currentText().lower()
+        global PRINT_LABELS, logger
+        PRINT_LABELS = self.printCheckBox.isChecked()
+        logger = self.log  # Set global logger to UI log function
+        self.log("Starting conversion...")
+        process_folder(filter_type, keywords, self.data_filter_dict, self.sourceLineEdit.text(), self.outputLineEdit.text())
+        self.log("Conversion finished.")
+
+if __name__ == "__main__":
+    app = QtWidgets.QApplication(sys.argv)
+    mainWin = MainWindow()
+    mainWin.show()
+    sys.exit(app.exec_())
