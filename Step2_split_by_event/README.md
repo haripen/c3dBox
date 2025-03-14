@@ -46,7 +46,6 @@ channels:
 dependencies:
   - python=3.8
   - pyqt
-  - pyqt5
   - numpy
   - scipy
 ```
