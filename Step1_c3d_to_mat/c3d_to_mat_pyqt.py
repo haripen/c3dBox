@@ -25,23 +25,165 @@ from datetime import datetime
 from PyQt5 import QtWidgets, QtCore, QtGui
 from scipy.io import savemat
 
-# Global flag for printing labels.
+# Global flag for printing raw labels.
 PRINT_LABELS = False
+# Global flag for kinetic debug output (set via UI)
+DEBUG_KINETIC = False
 # Global logger (will be set by the UI)
 logger = print
 
-# Attempt to load default filtering dictionary from "data_filter.json" automatically.
-if os.path.exists("data_filter.json"):
+# Default filtering dictionary (will be loaded via UI)
+data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
+
+# -------------------------------
+# Helper function to flatten kinetic target lists
+# -------------------------------
+def flatten_targets(targets):
+    flattened = []
+    for t in targets:
+        if isinstance(t, list):
+            flattened.extend(t)
+        else:
+            flattened.append(t)
+    return flattened
+
+# -------------------------------
+# New: Kinetic Validity Check Function
+# -------------------------------
+def check_kinetic_validity(extracted, data_filter_dict):
+    """
+    Check kinetic validity of events based on:
+      1. Valid forceplates (from the ENF file) for the given side (left/right).
+      2. Whether the kinetic target marker (e.g., LHEE or RHEE) at the event time
+         is within an allowed region defined around the forceplate center.
+         
+         The allowed region is computed as follows:
+           - Compute the forceplate center as the average of its four corners.
+           - For x and y, compute the half–range from the center (i.e. the maximum absolute
+             deviation among the corners) and add the threshold value.
+           - For z, use the threshold value directly.
+         
+         That is, for each valid forceplate:
+           allowed_x = half_range_x + threshold_x
+           allowed_y = half_range_y + threshold_y
+           allowed_z = threshold_z
+         and the marker must satisfy:
+           abs(marker_x - center_x) <= allowed_x,
+           abs(marker_y - center_y) <= allowed_y,
+           abs(marker_z - center_z) <= allowed_z.
+    
+    Debug printouts are sent to the global logger only if DEBUG_KINETIC is True.
+    The result is stored in extracted['events']['kinetic'] as a boolean list.
+    """
+    debug = DEBUG_KINETIC
+
     try:
-        with open("data_filter.json", "r") as f:
-            data_filter_dict = json.load(f)
-        print("Automatically loaded data_filter_dict from data_filter.json")
-    except Exception as e:
-        print("Error loading data_filter.json, using default:", e)
-        data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
-else:
-    print("data_filter.json not found. Using default empty filter dict.")
-    data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
+        fp_validity = extracted["meta"]["FORCE_PLATFORM"]["VALID"]
+        fp_corners = extracted["meta"]["FORCE_PLATFORM"]["CORNERS"]["value"]
+    except KeyError:
+        if debug:
+            logger("Warning: FORCE_PLATFORM data missing. Marking all events as non-kinetic.")
+        extracted["events"]["kinetic"] = [False] * len(extracted["events"]["event_times"])
+        return
+
+    # Compute the center for each forceplate.
+    num_fp = fp_corners.shape[2]
+    fp_centers = {}
+    for i in range(num_fp):
+        fp_key = f"FP{i+1}"
+        corners = fp_corners[:, :, i]  # shape (3, 4)
+        center = np.mean(corners, axis=1)  # shape (3,)
+        fp_centers[fp_key] = center
+        if debug:
+            logger(f"Forceplate {fp_key}: center = {center}")
+
+    point_time = np.array(extracted["point"]["time"])
+    kinetic_validity = []
+
+    for evt_idx, (event_time, event_label_chars) in enumerate(zip(extracted["events"]["event_times"],
+                                                                   extracted["events"]["event_labels"])):
+        event_label = "".join(event_label_chars).strip().lower()
+        valid = False
+
+        if "left" in event_label:
+            side = "Left"
+            marker_list = data_filter_dict.get("left_kinetic_target", [])
+            thresh_list = data_filter_dict.get("left_critDist_xyz", [])
+        elif "right" in event_label:
+            side = "Right"
+            marker_list = data_filter_dict.get("right_kinetic_target", [])
+            thresh_list = data_filter_dict.get("right_critDist_xyz", [])
+        else:
+            if debug:
+                logger(f"Event {evt_idx+1}: '{event_label}' does not specify left/right. Marked as non-kinetic.")
+            kinetic_validity.append(False)
+            continue
+
+        frame_idx = int(np.argmin(np.abs(point_time - event_time)))
+        if debug:
+            logger(f"\nEvent {evt_idx+1}: time = {event_time}, label = '{event_label}', side = {side}, frame_idx = {frame_idx}")
+
+        # Gather valid forceplates for the given side.
+        valid_fp_list = []
+        for fp_key, fp_side in fp_validity.items():
+            if fp_side.lower() == side.lower():
+                if fp_key in fp_centers:
+                    valid_fp_list.append(fp_key)
+        if not valid_fp_list:
+            if debug:
+                logger(f"  No valid forceplates found for side {side}.")
+            kinetic_validity.append(False)
+            continue
+
+        # Flatten kinetic target markers
+        marker_list = flatten_targets(marker_list)
+        for marker, thresh in zip(marker_list, thresh_list):
+            if marker not in extracted["point"]:
+                if debug:
+                    logger(f"  Marker '{marker}' not found in point data.")
+                continue
+            marker_data = extracted["point"][marker]
+            if marker_data.shape[0] <= frame_idx:
+                if debug:
+                    logger(f"  Marker '{marker}' does not have data for frame index {frame_idx}.")
+                continue
+            marker_pos = marker_data[frame_idx, :]  # marker 3D position
+            if debug:
+                logger(f"  Kinetic target '{marker}' position at frame {frame_idx}: {marker_pos}")
+            # Check every valid forceplate.
+            for fp_key in valid_fp_list:
+                center = fp_centers[fp_key]
+                # Retrieve the forceplate corners (FP1 -> index 0, etc.)
+                corners = fp_corners[:, :, int(fp_key[2:]) - 1]
+                half_range_x = np.max(np.abs(corners[0, :] - center[0]))
+                half_range_y = np.max(np.abs(corners[1, :] - center[1]))
+                allowed_x = half_range_x + thresh[0]
+                allowed_y = half_range_y + thresh[1]
+                allowed_z = thresh[2]
+                dist_x = np.abs(marker_pos[0] - center[0])
+                dist_y = np.abs(marker_pos[1] - center[1])
+                dist_z = np.abs(marker_pos[2] - center[2])
+                if debug:
+                    logger(f"    Checking forceplate {fp_key}:")
+                    logger(f"      Center: {center}")
+                    logger(f"      Half-range x: {half_range_x}, allowed_x = {allowed_x} (threshold_x = {thresh[0]})")
+                    logger(f"      Half-range y: {half_range_y}, allowed_y = {allowed_y} (threshold_y = {thresh[1]})")
+                    logger(f"      Allowed z = {allowed_z} (threshold_z = {thresh[2]})")
+                    logger(f"      Distances: x = {dist_x}, y = {dist_y}, z = {dist_z}")
+                if (dist_x <= allowed_x) and (dist_y <= allowed_y) and (dist_z <= allowed_z):
+                    if debug:
+                        logger(f"      Marker '{marker}' is within allowed range of forceplate {fp_key}.")
+                    valid = True
+                    break
+                else:
+                    if debug:
+                        logger(f"      Marker '{marker}' is NOT within allowed range of forceplate {fp_key}.")
+            if valid:
+                break
+        kinetic_validity.append(valid)
+        if debug:
+            logger(f"  --> Event {evt_idx+1} kinetic validity: {valid}")
+    extracted["events"]["kinetic"] = kinetic_validity
 
 # -------------------------------
 # Conversion Functions (reused from c3d_to_mat.py)
@@ -242,6 +384,7 @@ def process_c3d_file(c3d_path, data_filter_dict):
             padded = np.empty((0,0))
         events = {"event_times": filtered_times, "event_labels": padded}
 
+    # --- Updated Point (marker) data extraction ---
     raw_point_labels = c3d_file['parameters']['POINT']['LABELS']['value']
     if "LABELS2" in c3d_file['parameters']['POINT']:
         raw_point_labels += c3d_file['parameters']['POINT']['LABELS2']['value']
@@ -253,12 +396,23 @@ def process_c3d_file(c3d_path, data_filter_dict):
     timeC3D = frames_vector / point_rate - 1/point_rate
     point_struct = {"time": timeC3D.tolist(), "frames": frames_vector.tolist()}
     used_point_labels = set()
+    # Get generic point filter from data_filter_dict
     point_filter = data_filter_dict.get("point", [])
+    # Build a list of kinetic targets from left and right (ensure they are always included)
+    kinetic_targets = []
+    kinetic_targets += data_filter_dict.get("left_kinetic_target", [])
+    kinetic_targets += data_filter_dict.get("right_kinetic_target", [])
+    kinetic_targets = flatten_targets(kinetic_targets)
+    kinetic_targets_lower = [t.lower() for t in kinetic_targets]
+
     for i, lab in enumerate(raw_point_labels):
         lab_stripped = lab.strip()
         if lab_stripped.startswith("*"):
             continue
-        if point_filter and not any(kw.lower() in lab_stripped.lower() for kw in point_filter):
+        # If a point filter is specified, only export channels matching one of the keywords,
+        # unless the marker is a kinetic target.
+        if point_filter and (lab_stripped.lower() not in kinetic_targets_lower) and \
+           not any(kw.lower() in lab_stripped.lower() for kw in point_filter):
             continue
         unique_label = get_unique_field_label(lab_stripped, used_point_labels)
         point_struct[unique_label] = points[:, i, :]
@@ -293,6 +447,10 @@ def process_c3d_file(c3d_path, data_filter_dict):
         "point": point_struct,
         "analog": analog_struct
     }
+
+    # --- Run the kinetic validity check ---
+    check_kinetic_validity(extracted, data_filter_dict)
+
     return extracted
 
 def find_c3d_files(root_folder):
@@ -428,9 +586,9 @@ class MainWindow(QtWidgets.QMainWindow):
         hboxKeywords.addWidget(self.keywordsLineEdit)
         layout.addLayout(hboxKeywords)
 
-        # Print labels checkbox
-        self.printCheckBox = QtWidgets.QCheckBox("Print raw point and analog labels")
-        self.printCheckBox.setToolTip("If checked, raw labels will be printed to the log in 9pt font.")
+        # Print labels checkbox (also used for kinetic debug output)
+        self.printCheckBox = QtWidgets.QCheckBox("Print raw point and analog labels (also enables kinetic debug)")
+        self.printCheckBox.setToolTip("If checked, raw labels and kinetic debug output will be printed to the log in 9pt font.")
         layout.addWidget(self.printCheckBox)
 
         # Run conversion button
@@ -513,6 +671,9 @@ class MainWindow(QtWidgets.QMainWindow):
         QtWidgets.QMessageBox.about(self, "About C3D to MAT Converter", about_text)
 
     def runConversion(self):
+        global DEBUG_KINETIC
+        # Set kinetic debug flag based on the checkbox state.
+        DEBUG_KINETIC = self.printCheckBox.isChecked()
         source = self.sourceLineEdit.text().strip()
         output = self.outputLineEdit.text().strip()
         if not source or not output:
@@ -530,6 +691,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
+    # Set application-wide tooltip style: black text on light grey background.
+    app.setStyleSheet("QToolTip { color: black; background-color: #f0f0f0; border: 1px solid black; }")
     mainWin = MainWindow()
     mainWin.show()
     sys.exit(app.exec_())

@@ -59,5 +59,9 @@
     "EMG.EMG_27_L M.erector spine",
     "EMG.EMG_31_L M.gluteus maximus",
     "EMG.EMG_32_L M. gluteus medius"
-  ]
+  ],
+  "left_kinetic_target": [["LHEE"]],
+  "left_critDist_xyz": [[100,100,300]],
+  "right_kinetic_target": [["RHEE"]],
+  "right_critDist_xyz": [[100,100,300]]
 }

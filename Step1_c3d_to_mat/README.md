@@ -1,6 +1,6 @@
 # [Step 1] C3D to MAT Converter
 
-This GUI or script convert C3D files into MATLAB MAT files using ezC3D and PyQt5. It features an interface for selecting input and output folders, filtering data, and enriching MAT files with metadata, events, point, and analog data.
+This GUI or script convert C3D files into MATLAB MAT files using ezC3D and PyQt5. It features an interface for selecting input and output folders, filtering data, and enriching MAT files with metadata, events, kinetic-event detection, point, and analog data.
 
 Use this line after importing a .mat file to convert event labels to a Matlab cell string.
 
@@ -21,6 +21,8 @@ from utils_py.mat2dict import loadmat_to_dict
 - **GUI**: PyQt5 interface with controls and helpful tooltips.
 - **File Filtering:** Choose a filter mode (e.g., by file attributes or filename) and apply custom keywords for targeted file selection.
 - **JSON-Based Data-Export Filters:** Automatically or manually load filter definitions from JSON files for precise data selection.
+  
+  It defines marker targets and threshold values used to detect kinetic events in C3D data. Keys like "left_kinetic_target" and "right_kinetic_target" specify the marker names (e.g., "LHEE" for left and "RHEE" for right), while "left_critDist_xyz" and "right_critDist_xyz" provide the minimum allowable distances in x, y, and z from the forceplate center. During processing, the script extracts the marker's 3D position at each event time and compares it to the forceplate's center (computed from its corners) with allowed deviations set as half the forceplate's dimensions plus the threshold. An event is flagged as kinetic if the marker's position lies within these extended bounds.
 - **Meta Data Integration:** Includes detailed metadata such as sampling rates, frame ranges, and complete file headers.
 - **Structured Data Export:**
   - **Events:** Exported in character arrays.
@@ -105,9 +107,15 @@ Example JSON format for filtering:
   "meta": [],
   "event": [],
   "analog": ["Label1", "Label2"],
-  "point": ["Label3", "Label4"]
+  "point": ["Label3", "Label4"],
+  "left_kinetic_target": [["Left_Marker"]],
+  "left_critDist_xyz":  [[xThresh,yThresh,zThresh]],
+  "right_kinetic_target": [["Right_Marker"]],
+  "right_critDist_xyz":  [[xThresh,yThresh,zThresh]]
 }
 ```
+
+The "###__critDist_xyz" field is defined as a list containing a single list of three numeric values: [xThresh, yThresh, zThresh]. These values represent the minimum distance thresholds for the x, y, and z axes, respectively. In the kinetic event detection, the marker's position is compared to the forceplate's center. For the x and y coordinates, the allowed deviation is calculated by adding the threshold value to half the forceplate's dimension in that axis; for the z coordinate, the threshold value is used directly to determine if the marker is within the acceptable vertical range.
 
 Customize the lists to match your specific filtering criteria.
 

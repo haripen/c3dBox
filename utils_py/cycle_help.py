@@ -91,31 +91,16 @@ def split_data_by_cycles(data_dict, cycle_periods, cycles_from_to):
     For each cycle (e.g. 'left_stride'), the function uses data_dict['point']['time'] and 
     data_dict['analog']['time'] to select the indices that fall within the cycle's time window.
     
-    For each cycle instance, the output dictionary contains:
-      - 'point': a dict with all keys from data_dict['point'], sliced to the cycle interval.
-      - 'analog': a dict with all keys from data_dict['analog'], sliced to the cycle interval.
-      - If the cycle definition is three events, an extra key with the central event label is added.
-        Its value is a dict with keys:
-            'time'    : central event time,
-            'frame'   : the corresponding frame from point data,
-            'percent' : cycle percentage computed as 
-                        ((central_time - start_time) / (end_time - start_time)) * 100.
-    
-    Parameters:
-        data_dict (dict): Loaded data containing keys 'point', 'analog', etc.
-        cycle_periods (dict): Cycle boundaries computed from events. For each cycle type,
-                              each instance is a tuple:
-                              - For two-event cycles: (start_time, end_time)
-                              - For three-event cycles: (start_time, central_time, end_time)
-        cycles_from_to (dict): A dictionary mapping each cycle type to its defining event labels.
-                               For example:
-                                   'left_stride': ['Left Foot Strike', 'Left Foot Off', 'Left Foot Strike']
+    Additionally, if data_dict['events'] contains a 'kinetic' field, the kinetic flag for the 
+    cycle is determined from the event closest to the cycle’s start time and added as a new key 
+    'kinetic' in the cycle instance.
     
     Returns:
         dict: A nested dictionary structured as:
               { cycle_type: { "cycle1": { 'point': { ... },
                                           'analog': { ... },
-                                          [central_event_label]: { 'time': ..., 'frame': ..., 'percent': ... }
+                                          'kinetic': True/False,
+                                          [central_event_label]: { ... } (if applicable)
                                         },
                                 "cycle2": { ... },
                                 ...
@@ -124,19 +109,24 @@ def split_data_by_cycles(data_dict, cycle_periods, cycles_from_to):
     """
     cycle_data = {}
     
-    # Global arrays for point time and frames.
+    # Global arrays for point and analog times and frames.
     global_pt_time = np.array(data_dict['point']['time'])
     global_pt_frames = np.array(data_dict['point']['frames'])
-    
-    # Global analog time.
     global_an_time = np.array(data_dict['analog']['time'])
     
+    # Retrieve event times and kinetic flags if available.
+    if 'kinetic' in data_dict['events']:
+        event_times = np.array(data_dict['events']['event_times'])
+        kinetic_flags = data_dict['events']['kinetic']
+    else:
+        kinetic_flags = None
+
     for cycle_type, cycles in cycle_periods.items():
         cycle_data[cycle_type] = {}
         # Determine if a central event is defined (3-event cycle) for this cycle type.
         has_central = (len(cycles_from_to.get(cycle_type, [])) == 3)
         if has_central:
-            central_label = cycles_from_to[cycle_type][1].replace(' ','_')
+            central_label = cycles_from_to[cycle_type][1].replace(' ', '_')
         
         for cycle_num, period in cycles.items():
             # For 2-event cycles, period is (start, end)
@@ -162,10 +152,9 @@ def split_data_by_cycles(data_dict, cycle_periods, cycles_from_to):
             
             cycle_instance = {'point': point_cycle, 'analog': analog_cycle}
             
-            # If there is a central event (3-event cycle), add its details as a dict.
+            # If there is a central event (3-event cycle), add its details.
             if has_central:
                 central_time = period[1]
-                # Find the closest index in the global point time array.
                 pt_central_idx = np.argmin(np.abs(global_pt_time - central_time))
                 central_frame = global_pt_frames[pt_central_idx]
                 cycle_duration = end_time - start_time
@@ -178,7 +167,11 @@ def split_data_by_cycles(data_dict, cycle_periods, cycles_from_to):
                     'percent': cycle_percentage
                 }
             
-            # Use a key formatted as "cycleX" instead of just the cycle number.
+            # Set the kinetic flag based on the event closest to the cycle start time.
+            if kinetic_flags is not None:
+                idx = np.argmin(np.abs(event_times - start_time))
+                cycle_instance['kinetic'] = kinetic_flags[idx]
+            
             cycle_key = "cycle" + str(cycle_num)
             cycle_data[cycle_type][cycle_key] = cycle_instance
     
