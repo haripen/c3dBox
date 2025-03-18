@@ -19,24 +19,43 @@ from utils_py.mat2dict import loadmat_to_dict
 ## Features
 
 - **GUI**: PyQt5 interface with controls and helpful tooltips.
+
 - **File Filtering:** Choose a filter mode (e.g., by file attributes or filename) and apply custom keywords for targeted file selection.
+
 - **JSON-Based Data-Export Filters:** Automatically or manually load filter definitions from JSON files for precise data selection.
   
   It defines marker targets and threshold values used to detect kinetic events in C3D data. Keys like "left_kinetic_target" and "right_kinetic_target" specify the marker names (e.g., "LHEE" for left and "RHEE" for right), while "left_critDist_xyz" and "right_critDist_xyz" provide the minimum allowable distances in x, y, and z from the forceplate center. During processing, the script extracts the marker's 3D position at each event time and compares it to the forceplate's center (computed from its corners) with allowed deviations set as half the forceplate's dimensions plus the threshold. An event is flagged as kinetic if the marker's position lies within these extended bounds.
+
 - **Meta Data Integration:** Includes detailed metadata such as sampling rates, frame ranges, and complete file headers.
+
 - **Structured Data Export:**
+  
   - **Events:** Exported in character arrays.
   - **Point and Analog Data:** Organized clearly with unique, MATLAB-friendly field names and filtered according to user criteria.
+
 - **Logging Support:** Optional detailed logging of raw data labels for setting up the JSON or for debugging.
 
 ---
 
 ## Environment Setup
 
-Use the provided YAML file to set up the environment with Conda:
+1. [Download ](/docs/getting-started/anaconda/install#windows-installation)and install Python via anaconda
+
+2. [Download ](https://github.com/haripen/c3dBox/archive/refs/heads/main.zip)the repository as ZIP File
+
+3. Extract the ZIP file to a desired folder
+
+4. In Anaconda Prompt Command Line with admin privileges, use ``cd My_Path`` or ``cd /d MyPathOnAnotherDrive`` to switch to the folder where you extraxted the ZIP content to.
+
+5. ``cd`` to  ``Step1_c3d_to_mat`` and use the provided YAML file to set up the environment with Conda:
 
 ```bash
 conda env create -f c3d_to_mat.yml
+```
+
+Now switch to non-admin privieges and activate the environment:
+
+```bash
 conda activate c3d_to_mat
 ```
 

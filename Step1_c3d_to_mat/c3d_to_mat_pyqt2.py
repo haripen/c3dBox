@@ -350,7 +350,8 @@ def process_c3d_file(c3d_path, data_filter_dict):
                 for line in f:
                     if line.startswith('SUBJECTS='):
                         subjects_line = line.split('=', 1)[1].strip()
-                        subject_list = [s.lower() for s in subjects_line.split()]
+                        # Split on commas and whitespace to handle lines like "Rd0001 Rd0001,Kiste"
+                        subject_list = [s.strip().lower() for s in re.split(r'[,\s]+', subjects_line) if s.strip()]
                         break
         except Exception as e:
             logger(f"Error reading subjects from {enf_path}: {e}")
@@ -372,12 +373,6 @@ def process_c3d_file(c3d_path, data_filter_dict):
     meta = filter_dict_by_keywords(meta, data_filter_dict.get("meta", []))
     point_rate = c3d_file['parameters']['POINT']['RATE']['value'][0]
     analog_rate = c3d_file['parameters']['ANALOG']['RATE']['value'][0]
-    #analog_first = c3d_file['header']['analogs']['first_frame']
-    #analog_last = c3d_file['header']['analogs']['last_frame']
-    #meta["point_rate"] = point_rate
-    #meta["analog_rate"] = analog_rate
-    #meta["analog_first"] = analog_first
-    #meta["analog_last"] = analog_last
     meta["header"] = c3d_file.get("header", {})
 
     events = extract_event_times_and_labels(c3d_path)
@@ -407,6 +402,7 @@ def process_c3d_file(c3d_path, data_filter_dict):
     n_frames = points.shape[0]
     frames_vector = np.arange(0, n_frames) + actual_start
     timeC3D = frames_vector / point_rate - 1/point_rate
+    # Build the full point dictionary (internal use)
     point_struct = {"time": timeC3D.tolist(), "frames": frames_vector.tolist()}
     used_point_labels = set()
     point_filter = data_filter_dict.get("point", [])
@@ -418,11 +414,13 @@ def process_c3d_file(c3d_path, data_filter_dict):
         # --- If SUBJECTS= was found, remove a prepended subject if its prefix matches any subject ---
         if subject_list and ":" in lab_stripped:
             prefix, remainder = lab_stripped.split(":", 1)
-            if prefix.strip().lower() in subject_list:
+            if any(sub in prefix.strip().lower() for sub in subject_list):
                 lab_stripped = remainder.strip()
         if lab_stripped.startswith("*"):
             continue
-        if point_filter and (lab_stripped.lower() not in kinetic_targets_lower) and not any(kw.lower() in lab_stripped.lower() for kw in point_filter):
+        # Always include a marker if it is a kinetic target,
+        # even if it is not in the JSON "point" list.
+        if point_filter and (lab_stripped.lower() not in set(pt.lower() for pt in point_filter)) and (lab_stripped.lower() not in kinetic_targets_lower):
             continue
         unique_label = get_unique_field_label(lab_stripped, used_point_labels)
         point_struct[unique_label] = points[:, i, :]
@@ -452,7 +450,23 @@ def process_c3d_file(c3d_path, data_filter_dict):
         logger("[label]Raw Analog Labels for " + c3d_path + " : " + str(raw_analog_labels))
 
     extracted = {"meta": meta, "events": events, "point": point_struct, "analog": analog_struct}
+    # Run kinetic validity check using the full point dictionary.
     check_kinetic_validity(extracted, data_filter_dict)
+    
+    # --- Final Filtering for Export ---
+    # If the JSON "point" list is provided, remove any markers from the exported point data
+    # that are not part of that list (except for 'time' and 'frames').
+    allowed_points = data_filter_dict.get("point", [])
+    if allowed_points:
+        allowed_set = set(pt.lower() for pt in allowed_points)
+        filtered_points = {"time": extracted["point"]["time"], "frames": extracted["point"]["frames"]}
+        for key, value in extracted["point"].items():
+            if key in ("time", "frames"):
+                continue
+            if key.lower() in allowed_set:
+                filtered_points[key] = value
+        extracted["point"] = filtered_points
+
     return extracted
 
 def find_c3d_files(root_folder):
