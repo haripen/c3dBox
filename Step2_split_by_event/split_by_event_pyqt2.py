@@ -24,7 +24,7 @@ License: MIT License
 Packages used: PyQt5, numpy, scipy
 """
 
-import os, sys, json, warnings
+import os, sys, json, warnings, gc
 import numpy as np
 import scipy.io
 from PyQt5 import QtWidgets, QtCore, QtGui
@@ -41,6 +41,14 @@ from utils_py.cycle_help import extract_cycle_periods, split_data_by_cycles
 # Global logger (will be set by the UI)
 logger = print
 
+def log_crash(message):
+    crash_log = os.path.join(current_dir, "crash_report.log")
+    try:
+        with open(crash_log, "a") as f:
+            f.write(message + "\n")
+    except Exception as e:
+        logger("Could not write crash report: " + str(e))
+
 # -------------------------------
 # Conversion Functions for MAT Files
 # -------------------------------
@@ -51,8 +59,10 @@ def process_mat_file(mat_path, cycles_from_to, show_keys=False):
       - Loads the .mat file as a dictionary.
       - Extracts event_times and event_labels from data_dict['events'].
       - Detects if the events follow an exercise or locomotion scheme.
-        For exercise: take only left_stride, rename the field to exercise, and ignore right_stride.
-        For locomotion: export left_stride and right_stride as in the original.
+          * For exercise: if at least 50% of left events (e.g. "Left Foot Strike"/"Off")
+            have a corresponding right event with the same action occurring within 0.02 sec,
+            then use only the left_stride cycle (renaming it to "exercise") and ignore right_stride.
+          * For locomotion: export left_stride and right_stride as in the original.
       - Computes cycle periods using extract_cycle_periods.
       - Splits point and analog data by cycles using split_data_by_cycles.
       - Merges meta and events back into the output.
@@ -63,9 +73,9 @@ def process_mat_file(mat_path, cycles_from_to, show_keys=False):
         data_dict = loadmat_to_dict(mat_path)
     except Exception as e:
         logger(f"Error loading {mat_path}: {e}")
+        log_crash(f"Error loading {mat_path}: {e}")
         return False
 
-    # Optionally log available keys from the loaded MAT file.
     if show_keys:
         logger("AVAILABLE KEYS: Loaded MAT file keys:")
         for key, value in data_dict.items():
@@ -73,62 +83,95 @@ def process_mat_file(mat_path, cycles_from_to, show_keys=False):
                 logger(f"AVAILABLE KEYS: {key}: {list(value.keys())}")
             else:
                 logger(f"AVAILABLE KEYS: {key}: {type(value)}")
-        # Additionally log event labels if available.
         if 'events' in data_dict and 'event_labels' in data_dict['events']:
             logger("AVAILABLE EVENT LABELS: " + str(data_dict['events']['event_labels']))
-    
-    # Check that events exist
-    if 'events' not in data_dict or 'event_times' not in data_dict['events'] or 'event_labels' not in data_dict['events']:
+
+    if ('events' not in data_dict or 
+        'event_times' not in data_dict['events'] or 
+        'event_labels' not in data_dict['events']):
         logger(f"File {mat_path} does not contain valid 'events' data. Skipping.")
         return False
 
     event_times = data_dict['events']['event_times']
     event_labels = data_dict['events']['event_labels']
     
-    # --- NEW: Detect if events follow an exercise scheme ---
-    # If both left_stride and right_stride are defined, check for at least one pair of
-    # left/right events occurring within 0.1 sec. In that case, use only left_stride,
-    # rename it to exercise, and ignore right_stride.
-    scheme = 'locomotion'
-    if "left_stride" in cycles_from_to and "right_stride" in cycles_from_to:
-        left_indices = [i for i, lab in enumerate(event_labels) if "Left" in lab]
-        right_indices = [i for i, lab in enumerate(event_labels) if "Right" in lab]
-        simultaneous_found = False
-        for li in left_indices:
-            for ri in right_indices:
-                if abs(event_times[li] - event_times[ri]) <= 0.1:
-                    simultaneous_found = True
-                    break
-            if simultaneous_found:
-                break
-        if simultaneous_found:
-            logger("Exercise scheme detected: using left_stride cycles as exercise cycles and ignoring right_stride.")
-            scheme = 'exercise'
-            cycles_from_to = {"exercise": cycles_from_to["left_stride"]}
-    # --- End of new logic ---
+    # --- Detect scheme ---
+    threshold_simultaneous = 0.02  # tolerance for matching events in exercise mode
+    left_simultaneous_count = 0
+    total_left_count = 0
+    for i, lab in enumerate(event_labels):
+        if lab.startswith("Left Foot"):
+            total_left_count += 1
+            try:
+                action = lab.split("Left Foot ")[1]
+            except IndexError:
+                continue
+            for j, lab2 in enumerate(event_labels):
+                if lab2.startswith("Right Foot"):
+                    try:
+                        action2 = lab2.split("Right Foot ")[1]
+                    except IndexError:
+                        continue
+                    if action2 == action and abs(event_times[i] - event_times[j]) < threshold_simultaneous:
+                        left_simultaneous_count += 1
+                        break
+    if total_left_count > 0 and (left_simultaneous_count / total_left_count) >= 0.5:
+        scheme = 'exercise'
+        logger("Exercise scheme detected: using left_stride as exercise cycle and ignoring right_stride.")
+        cycles_from_to = {"exercise": cycles_from_to["left_stride"]}
+    else:
+        scheme = 'locomotion'
+        logger("Locomotion scheme detected: using left_stride and right_stride cycles.")
+    # --- End scheme detection ---
 
-    # Compute cycle periods using provided cycle definitions from JSON.
-    cycle_periods = extract_cycle_periods(event_times, event_labels, cycles_from_to)
-    
-    # Split the data into cycles.
-    cycle_data = split_data_by_cycles(data_dict, cycle_periods, cycles_from_to)
-    
-    # If the scheme is exercise, ensure that only the exercise cycle is saved.
+    try:
+        cycle_periods = extract_cycle_periods(event_times, event_labels, cycles_from_to)
+        cycle_data = split_data_by_cycles(data_dict, cycle_periods, cycles_from_to)
+    except Exception as e:
+        logger(f"Error processing cycles in {mat_path}: {e}")
+        log_crash(f"Error processing cycles in {mat_path}: {e}")
+        return False
+
+    # --- Scheme-specific post-processing ---
     if scheme == 'exercise':
-        # In case split_data_by_cycles still returns a key "left_stride", rename it to "exercise"
+        # Replace left_stride key with exercise and remove right_stride.
         if "left_stride" in cycle_data:
             cycle_data["exercise"] = cycle_data.pop("left_stride")
-        # Remove any right_stride data if present.
         if "right_stride" in cycle_data:
             cycle_data.pop("right_stride")
-    
-    # Merge meta and events if available.
+        # Now, go one level deeper: if cycle_data["exercise"] is a dict (e.g., keys like 'cycle1', 'cycle2', ...)
+        # iterate through each cycle and remove the "Left_" prefix from its keys.
+        if "exercise" in cycle_data:
+            ex = cycle_data["exercise"]
+            if isinstance(ex, dict):
+                for cycle_name, cycle in ex.items():
+                    if isinstance(cycle, dict):
+                        new_cycle = {}
+                        for k, v in cycle.items():
+                            if k.startswith("Left_"):
+                                new_key = k[len("Left_"):]
+                            else:
+                                new_key = k
+                            new_cycle[new_key] = v
+                        ex[cycle_name] = new_cycle
+            elif isinstance(ex, list):
+                for idx, cycle in enumerate(ex):
+                    if isinstance(cycle, dict):
+                        new_cycle = {}
+                        for k, v in cycle.items():
+                            if k.startswith("Left_"):
+                                new_key = k[len("Left_"):]
+                            else:
+                                new_key = k
+                            new_cycle[new_key] = v
+                        ex[idx] = new_cycle
+    # --- End scheme-specific post-processing ---
+
     if 'meta' in data_dict:
         cycle_data['meta'] = data_dict['meta']
     if 'events' in data_dict:
         cycle_data['events'] = data_dict['events']
     
-    # Determine output file name (append _splitCycles before .mat)
     folder, filename = os.path.split(mat_path)
     base, ext = os.path.splitext(filename)
     out_filename = base + "_splitCycles.mat"
@@ -137,10 +180,15 @@ def process_mat_file(mat_path, cycles_from_to, show_keys=False):
     try:
         scipy.io.savemat(out_file, cycle_data)
         logger(f"Saved split cycles to {out_file}")
-        return True
     except Exception as e:
         logger(f"Error saving {out_file}: {e}")
+        log_crash(f"Error saving {out_file}: {e}")
         return False
+    finally:
+        # Free memory by deleting large objects and calling garbage collector.
+        del data_dict, cycle_data
+        gc.collect()
+    return True
 
 def find_mat_files(root_folder):
     """
@@ -158,7 +206,9 @@ def process_folder(source_root, output_root, cycles_from_to, show_keys=False):
     """
     Process all .mat files in source_root recursively:
       - For each file, load and process the file.
+      - In case of a crash while processing a file, log the error to a crash report.
       - Save output files under output_root preserving the relative directory structure.
+      - Call garbage collection after each file to free memory.
     """
     logger(f"Processing MAT files in: {source_root}")
     logger(f"Output will be saved in: {output_root}")
@@ -166,25 +216,28 @@ def process_folder(source_root, output_root, cycles_from_to, show_keys=False):
     logger(f"Found {len(mat_files)} .mat files.")
     processed_count = 0
     for file_path in mat_files:
-        # Compute relative folder and create corresponding output folder.
-        rel_path = os.path.relpath(os.path.dirname(file_path), source_root)
-        out_folder = os.path.join(output_root, rel_path)
-        os.makedirs(out_folder, exist_ok=True)
-        
-        # Process file
-        if process_mat_file(file_path, cycles_from_to, show_keys):
-            # Move the output file to the new output folder.
-            folder, filename = os.path.split(file_path)
-            base, ext = os.path.splitext(filename)
-            out_filename = base + "_splitCycles.mat"
-            original_out_path = os.path.join(folder, out_filename)
-            new_out_path = os.path.join(out_folder, out_filename)
-            try:
-                os.replace(original_out_path, new_out_path)
-                logger(f"Saved processed file to {new_out_path}")
-            except Exception as e:
-                logger(f"Error moving file {original_out_path} to {new_out_path}: {e}")
-            processed_count += 1
+        try:
+            if process_mat_file(file_path, cycles_from_to, show_keys):
+                folder, filename = os.path.split(file_path)
+                base, ext = os.path.splitext(filename)
+                out_filename = base + "_splitCycles.mat"
+                original_out_path = os.path.join(folder, out_filename)
+                rel_path = os.path.relpath(os.path.dirname(file_path), source_root)
+                out_folder = os.path.join(output_root, rel_path)
+                os.makedirs(out_folder, exist_ok=True)
+                new_out_path = os.path.join(out_folder, out_filename)
+                try:
+                    os.replace(original_out_path, new_out_path)
+                    logger(f"Saved processed file to {new_out_path}")
+                except Exception as e:
+                    logger(f"Error moving file {original_out_path} to {new_out_path}: {e}")
+                    log_crash(f"Error moving file {original_out_path} to {new_out_path}: {e}")
+                processed_count += 1
+        except Exception as e:
+            logger(f"Error processing file {file_path}: {e}")
+            log_crash(f"Error processing file {file_path}: {e}")
+        finally:
+            gc.collect()
     logger(f"Finished processing. {processed_count} files were converted.")
 
 # -------------------------------
@@ -198,10 +251,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize(800, 600)
         self.cycles_from_to = {}
         self.initUI()
-        self.loadCycleConfig()  # Try to load cycle configuration from JSON automatically.
+        self.loadCycleConfig()
 
     def initUI(self):
-        # Menu Bar with Settings Menu.
         menubar = self.menuBar()
         settingsMenu = menubar.addMenu("Settings")
         loadJsonAction = QtWidgets.QAction("Load JSON", self)
@@ -223,7 +275,6 @@ class MainWindow(QtWidgets.QMainWindow):
         titleLabel.setStyleSheet("font-size: 24px; font-weight: bold;")
         layout.addWidget(titleLabel)
         
-        # Source folder selection.
         hboxSource = QtWidgets.QHBoxLayout()
         self.sourceLineEdit = QtWidgets.QLineEdit()
         self.sourceLineEdit.setPlaceholderText("Select source folder containing MAT files")
@@ -236,7 +287,6 @@ class MainWindow(QtWidgets.QMainWindow):
         hboxSource.addWidget(self.sourceBrowseButton)
         layout.addLayout(hboxSource)
         
-        # Output folder selection.
         hboxOutput = QtWidgets.QHBoxLayout()
         self.outputLineEdit = QtWidgets.QLineEdit()
         self.outputLineEdit.setPlaceholderText("Select output folder")
@@ -249,20 +299,17 @@ class MainWindow(QtWidgets.QMainWindow):
         hboxOutput.addWidget(self.outputBrowseButton)
         layout.addLayout(hboxOutput)
         
-        # Checkbox: Show All Available Keys and Event Labels (unchecked by default).
         self.showKeysCheckBox = QtWidgets.QCheckBox("Show all available keys and event labels")
         self.showKeysCheckBox.setToolTip("When checked, logs all available keys and event labels from the loaded MAT file at 9pt font size in the log window.")
         self.showKeysCheckBox.setChecked(False)
         layout.addWidget(self.showKeysCheckBox)
         
-        # Button: Split MAT to Cycles.
         self.runButton = QtWidgets.QPushButton("Split MAT to Cycles")
         self.runButton.setStyleSheet("background-color: #007BFF; color: white; font-size: 16px;")
         self.runButton.setToolTip("Click to split the MAT files into cycles using the loaded cycle configuration.")
         self.runButton.clicked.connect(self.runConversion)
         layout.addWidget(self.runButton)
         
-        # Log output text area.
         self.logTextEdit = QtWidgets.QTextEdit()
         self.logTextEdit.setReadOnly(True)
         self.logTextEdit.setStyleSheet("background-color: #f0f0f0;")
@@ -270,7 +317,6 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.logTextEdit)
 
     def loadCycleConfig(self):
-        # Automatically try to load "cycle_config.json" if it exists.
         json_path = "cycle_config.json"
         if os.path.exists(json_path):
             try:
@@ -307,7 +353,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.outputLineEdit.setText(folder)
 
     def log(self, message):
-        # Format keys and event labels messages at 9pt font.
         if message.startswith("AVAILABLE KEYS:") or message.startswith("AVAILABLE EVENT LABELS:"):
             self.logTextEdit.append(f"<span style='font-size:9pt;'>{message}</span>")
         else:
@@ -333,7 +378,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.cycles_from_to:
             QtWidgets.QMessageBox.warning(self, "Error", "Cycle configuration is empty. Please load a valid JSON file.")
             return
-        # Set the global logger to the UI log function.
         global logger
         logger = self.log
         show_keys = self.showKeysCheckBox.isChecked()
@@ -343,7 +387,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    # Set global tooltip style with neutral background and black text.
     app.setStyleSheet("QToolTip { color: black; background-color: #ffffe0; border: 1px solid black; }")
     mainWin = MainWindow()
     mainWin.show()

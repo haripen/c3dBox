@@ -12,6 +12,7 @@ Features:
   - Automatically loads a filtering dictionary from data_filter.json if present.
   - You can load a different JSON via the Settings menu.
   - Meta data is enriched with point_rate, analog_rate, analog_first, analog_last, and the full C3D header.
+  - In case of any crash processing a file, a crash report log is saved to the app folder.
   - Info menu shows credits, author, date, and MIT license info.
 
 Author: Harald Penasso with ChatGPT assistance  
@@ -20,7 +21,7 @@ License: MIT License
 Packages used: PyQt5, ezc3d, numpy, scipy
 """
 
-import os, sys, json, re, numpy as np, ezc3d
+import os, sys, json, re, numpy as np, ezc3d, gc, traceback
 from datetime import datetime
 from PyQt5 import QtWidgets, QtCore, QtGui
 from scipy.io import savemat
@@ -509,18 +510,28 @@ def process_folder(filter_type, keywords, data_filter_dict, source_root, output_
     c3d_files = find_c3d_files(source_root)
     logger(f"Found {len(c3d_files)} C3D files.")
     processed_count = 0
+    crash_log_path = os.path.join(os.getcwd(), "crash_report.log")
     for file_path in c3d_files:
         if not file_matches_filter(file_path, filter_type, keywords):
             continue
-        extracted = process_c3d_file(file_path, data_filter_dict)
-        rel_path = os.path.relpath(os.path.dirname(file_path), source_root)
-        out_folder = os.path.join(output_root, rel_path)
-        os.makedirs(out_folder, exist_ok=True)
-        base_name = os.path.splitext(os.path.basename(file_path))[0]
-        out_file = os.path.join(out_folder, base_name + ".mat")
-        savemat(out_file, extracted)
-        logger(f"Saved extracted data to {out_file}")
-        processed_count += 1
+        try:
+            extracted = process_c3d_file(file_path, data_filter_dict)
+            rel_path = os.path.relpath(os.path.dirname(file_path), source_root)
+            out_folder = os.path.join(output_root, rel_path)
+            os.makedirs(out_folder, exist_ok=True)
+            base_name = os.path.splitext(os.path.basename(file_path))[0]
+            out_file = os.path.join(out_folder, base_name + ".mat")
+            savemat(out_file, extracted)
+            logger(f"Saved extracted data to {out_file}")
+            processed_count += 1
+        except Exception as e:
+            error_message = f"Error processing {file_path}: {str(e)}\n" + traceback.format_exc() + "\n"
+            logger(error_message)
+            with open(crash_log_path, "a") as crash_log:
+                crash_log.write(error_message)
+        finally:
+            # Force garbage collection to free memory after each file.
+            gc.collect()
     logger(f"Finished processing. {processed_count} files were extracted and saved.")
 
 # -------------------------------
