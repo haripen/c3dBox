@@ -1,0 +1,10 @@
+name: checkC3DEventPointExist
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy
+  - ezc3d
+  - tk
+  - pyinstaller
