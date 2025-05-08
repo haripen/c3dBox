@@ -79,15 +79,19 @@ python split_by_event.py
 Steps:
 
 1. **Select Input/Output Directories:**
+   
    - Click "Browse" to select directories for input MAT files and output segmented files.
 
 2. **Define Splitting Criteria:**
+   
    - Choose event markers for splitting files (e.g., start/end events).
 
 3. **Load JSON Configuration (Optional):**
+   
    - Load predefined splitting criteria from a JSON file.
 
 4. **Run Splitting:**
+   
    - Click "Run Split" to start. Monitor progress via the provided log window.
 
 ---
