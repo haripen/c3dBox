@@ -5,7 +5,7 @@ A collection of tools useful when working with C3D files.
 ## Python installation and setup
 Environment Setup
 
-1. [Download ](/docs/getting-started/anaconda/install#windows-installation)and install Python via anaconda
+1. [Download ](https://www.anaconda.com/download/success)and install Python via anaconda
   
 2. [Download ](https://github.com/haripen/c3dBox/archive/refs/heads/main.zip)the repository as ZIP File
   
