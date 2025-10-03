@@ -68,17 +68,14 @@ Customize the lists to match your specific filtering criteria.
 Contributions through issues or pull requests are welcome!
 
 ---
-## Loading the data in Matlab or Python
-Use this line after importing a .mat file to convert event labels to a Matlab cell string.
-
-```matlab
-events.event_labels = cellstr(events.event_labels);
-```
-
-In Python use
+## Loading the data in Python
+Run this from the root folder of the repository:
 
 ```python
+filepath_mat = r'.\example\mat\from_C3D\walk.mat'
 from utils_py.mat2dict import loadmat_to_dict
+imported_mat = loadmat_to_dict(filepath_mat)
+print(imported_mat["events"]["event_labels"])
 ```
 ---
 
