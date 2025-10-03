@@ -25,6 +25,7 @@ Packages used: PyQt5, numpy, scipy
 """
 
 import os, sys, json, warnings, gc
+from pathlib import Path
 import numpy as np
 import scipy.io
 from PyQt5 import QtWidgets, QtCore, QtGui
@@ -317,17 +318,32 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addWidget(self.logTextEdit)
 
     def loadCycleConfig(self):
-        json_path = "cycle_config.json"
-        if os.path.exists(json_path):
+        """
+        Load cycle_config.json from the folder where this GUI's .py file lives.
+        Falls back to the executable's folder when frozen (e.g., PyInstaller).
+        """
+        # Resolve the app directory robustly
+        if getattr(sys, "frozen", False):  # bundled executable
+            app_dir = Path(sys.executable).resolve().parent
+        else:
             try:
-                with open(json_path, "r") as f:
+                app_dir = Path(__file__).resolve().parent
+            except NameError:
+                # __file__ can be missing in some interactive contexts
+                app_dir = Path.cwd()
+
+        json_path = app_dir / "cycle_config.json"
+
+        if json_path.exists():
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
                     self.cycles_from_to = json.load(f)
                 self.log(f"Automatically loaded cycle configuration from {json_path}")
             except Exception as e:
                 self.log(f"Error loading {json_path}: {e}. Using empty cycle configuration.")
                 self.cycles_from_to = {}
         else:
-            self.log("cycle_config.json not found. Using empty cycle configuration.")
+            self.log(f"{json_path.name} not found at {json_path}. Using empty cycle configuration.")
             self.cycles_from_to = {}
 
     def loadJson(self):

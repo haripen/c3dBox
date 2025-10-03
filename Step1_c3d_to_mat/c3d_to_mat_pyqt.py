@@ -22,6 +22,7 @@ Packages used: PyQt5, ezc3d, numpy, scipy
 """
 
 import os, sys, json, re, numpy as np, ezc3d, gc, traceback
+from pathlib import Path
 from datetime import datetime
 from PyQt5 import QtWidgets, QtCore, QtGui
 from scipy.io import savemat
@@ -626,18 +627,47 @@ class MainWindow(QtWidgets.QMainWindow):
             self.keywordsLineEdit.setToolTip("All files will be processed; keywords are ignored.")
 
     def loadDataFilterDict(self):
-        json_path = "data_filter.json"
-        if os.path.exists(json_path):
+        """
+        Load data_filter.json from the folder where this GUI's .py file lives.
+        Falls back to the executable's folder when frozen (e.g., PyInstaller).
+        Ensures keys: meta, events, point, analog (all lists).
+        """
+        default_filter = {"meta": [], "events": [], "point": [], "analog": []}
+
+        # Resolve the app directory robustly
+        if getattr(sys, "frozen", False):  # bundled executable
+            app_dir = Path(sys.executable).resolve().parent
+        else:
             try:
-                with open(json_path, "r") as f:
-                    self.data_filter_dict = json.load(f)
+                app_dir = Path(__file__).resolve().parent
+            except NameError:
+                # __file__ can be missing in some interactive contexts
+                app_dir = Path.cwd()
+
+        json_path = app_dir / "data_filter.json"
+
+        if json_path.exists():
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+
+                if not isinstance(data, dict):
+                    raise ValueError("Root JSON must be an object/dict.")
+
+                # Merge with defaults and validate list types
+                merged = default_filter.copy()
+                for key in merged.keys():
+                    val = data.get(key, merged[key])
+                    merged[key] = val if isinstance(val, list) else merged[key]
+
+                self.data_filter_dict = merged
                 self.log(f"Automatically loaded data_filter_dict from {json_path}")
             except Exception as e:
                 self.log(f"Error loading {json_path}: {e}. Using default empty filter dict.")
-                self.data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
+                self.data_filter_dict = default_filter
         else:
-            self.log("data_filter.json not found. Using default empty filter dict.")
-            self.data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
+            self.log(f"{json_path.name} not found at {json_path}. Using default empty filter dict.")
+            self.data_filter_dict = default_filter
 
     def loadJson(self):
         json_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Load JSON Filter File", "", "JSON Files (*.json)")

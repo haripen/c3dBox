@@ -1,10 +1,10 @@
-import os
+import os, sys, json
 import ezc3d
+from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, simpledialog, messagebox
 from datetime import datetime
 import numpy as np
-import json
 
 # ------------ Defaults handling ------------
 DEFAULTS_FALLBACK = {
@@ -49,24 +49,26 @@ DEFAULTS_FALLBACK = {
 }
 
 def _script_dir():
+    # If frozen (PyInstaller), use the executable's directory
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent.as_posix()
     try:
-        return os.path.dirname(os.path.abspath(__file__))
+        return Path(__file__).resolve().parent.as_posix()
     except NameError:
-        return os.getcwd()
+        return Path.cwd().as_posix()
 
 def load_defaults():
-    """
-    Load defaults from defaults.json in the same folder as the script.
-    Merge with fallback so all keys exist.
-    """
     defaults = DEFAULTS_FALLBACK.copy()
+    defaults_path = Path(_script_dir()) / "defaults.json"
     try:
-        defaults_path = os.path.join(_script_dir(), "defaults.json")
         with open(defaults_path, "r", encoding="utf-8") as f:
             incoming = json.load(f)
         if isinstance(incoming, dict):
-            defaults.update(incoming)  # user JSON overrides fallback
+            defaults.update(incoming)
+    except FileNotFoundError:
+        pass
     except Exception:
+        # swallow other errors; keep fallback
         pass
     return defaults
 
