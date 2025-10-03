@@ -12,6 +12,7 @@ Features:
   - Automatically loads a filtering dictionary from data_filter.json if present.
   - You can load a different JSON via the Settings menu.
   - Meta data is enriched with point_rate, analog_rate, analog_first, analog_last, and the full C3D header.
+  - In case of any crash processing a file, a crash report log is saved to the app folder.
   - Info menu shows credits, author, date, and MIT license info.
 
 Author: Harald Penasso with ChatGPT assistance  
@@ -20,23 +21,21 @@ License: MIT License
 Packages used: PyQt5, ezc3d, numpy, scipy
 """
 
-import os, sys, json, re, numpy as np, ezc3d
+import os, sys, json, re, numpy as np, ezc3d, gc, traceback
 from datetime import datetime
 from PyQt5 import QtWidgets, QtCore, QtGui
 from scipy.io import savemat
 
-# Global flag for printing raw labels.
+# Global flags and logger
 PRINT_LABELS = False
-# Global flag for kinetic debug output (set via UI)
 DEBUG_KINETIC = False
-# Global logger (will be set by the UI)
 logger = print
 
-# Default filtering dictionary (will be loaded via UI)
+# Default filtering dictionary (loaded via UI)
 data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
 
 # -------------------------------
-# Helper function to flatten kinetic target lists
+# Helper: Flatten kinetic target lists
 # -------------------------------
 def flatten_targets(targets):
     flattened = []
@@ -48,35 +47,10 @@ def flatten_targets(targets):
     return flattened
 
 # -------------------------------
-# New: Kinetic Validity Check Function
+# Kinetic Validity Check Function (unchanged)
 # -------------------------------
 def check_kinetic_validity(extracted, data_filter_dict):
-    """
-    Check kinetic validity of events based on:
-      1. Valid forceplates (from the ENF file) for the given side (left/right).
-      2. Whether the kinetic target marker (e.g., LHEE or RHEE) at the event time
-         is within an allowed region defined around the forceplate center.
-         
-         The allowed region is computed as follows:
-           - Compute the forceplate center as the average of its four corners.
-           - For x and y, compute the half–range from the center (i.e. the maximum absolute
-             deviation among the corners) and add the threshold value.
-           - For z, use the threshold value directly.
-         
-         That is, for each valid forceplate:
-           allowed_x = half_range_x + threshold_x
-           allowed_y = half_range_y + threshold_y
-           allowed_z = threshold_z
-         and the marker must satisfy:
-           abs(marker_x - center_x) <= allowed_x,
-           abs(marker_y - center_y) <= allowed_y,
-           abs(marker_z - center_z) <= allowed_z.
-    
-    Debug printouts are sent to the global logger only if DEBUG_KINETIC is True.
-    The result is stored in extracted['events']['kinetic'] as a boolean list.
-    """
     debug = DEBUG_KINETIC
-
     try:
         fp_validity = extracted["meta"]["FORCE_PLATFORM"]["VALID"]
         fp_corners = extracted["meta"]["FORCE_PLATFORM"]["CORNERS"]["value"]
@@ -86,25 +60,22 @@ def check_kinetic_validity(extracted, data_filter_dict):
         extracted["events"]["kinetic"] = [False] * len(extracted["events"]["event_times"])
         return
 
-    # Compute the center for each forceplate.
     num_fp = fp_corners.shape[2]
     fp_centers = {}
     for i in range(num_fp):
         fp_key = f"FP{i+1}"
-        corners = fp_corners[:, :, i]  # shape (3, 4)
-        center = np.mean(corners, axis=1)  # shape (3,)
+        corners = fp_corners[:, :, i]
+        center = np.mean(corners, axis=1)
         fp_centers[fp_key] = center
         if debug:
             logger(f"Forceplate {fp_key}: center = {center}")
 
     point_time = np.array(extracted["point"]["time"])
     kinetic_validity = []
-
     for evt_idx, (event_time, event_label_chars) in enumerate(zip(extracted["events"]["event_times"],
                                                                    extracted["events"]["event_labels"])):
         event_label = "".join(event_label_chars).strip().lower()
         valid = False
-
         if "left" in event_label:
             side = "Left"
             marker_list = data_filter_dict.get("left_kinetic_target", [])
@@ -123,19 +94,16 @@ def check_kinetic_validity(extracted, data_filter_dict):
         if debug:
             logger(f"\nEvent {evt_idx+1}: time = {event_time}, label = '{event_label}', side = {side}, frame_idx = {frame_idx}")
 
-        # Gather valid forceplates for the given side.
         valid_fp_list = []
         for fp_key, fp_side in fp_validity.items():
-            if fp_side.lower() == side.lower():
-                if fp_key in fp_centers:
-                    valid_fp_list.append(fp_key)
+            if fp_side.lower() == side.lower() and fp_key in fp_centers:
+                valid_fp_list.append(fp_key)
         if not valid_fp_list:
             if debug:
                 logger(f"  No valid forceplates found for side {side}.")
             kinetic_validity.append(False)
             continue
 
-        # Flatten kinetic target markers
         marker_list = flatten_targets(marker_list)
         for marker, thresh in zip(marker_list, thresh_list):
             if marker not in extracted["point"]:
@@ -147,13 +115,11 @@ def check_kinetic_validity(extracted, data_filter_dict):
                 if debug:
                     logger(f"  Marker '{marker}' does not have data for frame index {frame_idx}.")
                 continue
-            marker_pos = marker_data[frame_idx, :]  # marker 3D position
+            marker_pos = marker_data[frame_idx, :]
             if debug:
                 logger(f"  Kinetic target '{marker}' position at frame {frame_idx}: {marker_pos}")
-            # Check every valid forceplate.
             for fp_key in valid_fp_list:
                 center = fp_centers[fp_key]
-                # Retrieve the forceplate corners (FP1 -> index 0, etc.)
                 corners = fp_corners[:, :, int(fp_key[2:]) - 1]
                 half_range_x = np.max(np.abs(corners[0, :] - center[0]))
                 half_range_y = np.max(np.abs(corners[1, :] - center[1]))
@@ -186,9 +152,8 @@ def check_kinetic_validity(extracted, data_filter_dict):
     extracted["events"]["kinetic"] = kinetic_validity
 
 # -------------------------------
-# Conversion Functions (reused from c3d_to_mat.py)
+# Conversion Functions (c3d to mat)
 # -------------------------------
-
 def extract_event_times_and_labels(c3d_path):
     c3d_file = ezc3d.c3d(c3d_path)
     try:
@@ -221,8 +186,7 @@ def process_field_label(label):
     for token in tokens:
         if not new_tokens or token.lower() != new_tokens[-1].lower():
             new_tokens.append(token)
-    candidate = "_".join(new_tokens)
-    return candidate
+    return "_".join(new_tokens)
 
 def get_unique_field_label(raw_label, used_labels):
     candidate = process_field_label(raw_label)
@@ -275,9 +239,39 @@ def get_unique_mp_basenames(folder):
         basenames.setdefault(base, []).append(f)
     return basenames
 
+# --- Original MP info function ---
 def get_mp_info(folder):
     basenames = get_unique_mp_basenames(folder)
     if not basenames:
+        return {}
+    if len(basenames) > 1:
+        logger("Error: Multiple unique MP/VSK file sets detected in folder:")
+        for base, files in basenames.items():
+            logger(f"  {base}: {files}")
+        logger("Please remove all additional MP/VSK file sets and try again.")
+        sys.exit(1)
+    mp_info = {}
+    for base, files in basenames.items():
+        for f in files:
+            path = os.path.join(folder, f)
+            info = parse_mp_file(path)
+            mp_info.update(info)
+    return mp_info
+
+# --- New MP info function that cross-checks with SUBJECTS= ---
+def get_mp_info_with_subject(folder, subject_list):
+    basenames = get_unique_mp_basenames(folder)
+    if subject_list:
+        # Keep only MP files whose basename contains any of the subjects.
+        basenames = {k: v for k, v in basenames.items() if any(sub in k.lower() for sub in subject_list)}
+        # If multiple candidates exist and one has basename exactly "kiste", remove it.
+        if len(basenames) > 1:
+            for k in list(basenames.keys()):
+                if k.lower() == "kiste" and len(basenames) > 1:
+                    logger(f"Ignoring MP/VSK file set '{k}' as it matches 'kiste'.")
+                    del basenames[k]
+    if not basenames:
+        logger(f"No MP/VSK file set matching subjects '{subject_list}' found in folder.")
         return {}
     if len(basenames) > 1:
         logger("Error: Multiple unique MP/VSK file sets detected in folder:")
@@ -347,8 +341,29 @@ def process_c3d_file(c3d_path, data_filter_dict):
                 meta["FORCE_PLATFORM"] = {"VALID": fp_validity}
     else:
         logger(f"Warning: No matching ENF file found for {c3d_path}.")
+
     folder = os.path.dirname(c3d_path)
-    mp_info = get_mp_info(folder)
+    # --- Extract subjects from ENF file (strictly from SUBJECTS=) ---
+    subject_list = []
+    if enf_path:
+        try:
+            with open(enf_path, 'r') as f:
+                for line in f:
+                    if line.startswith('SUBJECTS='):
+                        subjects_line = line.split('=', 1)[1].strip()
+                        # Split on commas and whitespace to handle lines like "Rd0001 Rd0001,Kiste"
+                        subject_list = [s.strip().lower() for s in re.split(r'[,\s]+', subjects_line) if s.strip()]
+                        break
+        except Exception as e:
+            logger(f"Error reading subjects from {enf_path}: {e}")
+    # Use the new helper if subjects are provided; otherwise, fallback to original.
+    if subject_list:
+        mp_info = get_mp_info_with_subject(folder, subject_list)
+        # If no MP info is found using the subject filter, fallback to original.
+        if not mp_info:
+            mp_info = get_mp_info(folder)
+    else:
+        mp_info = get_mp_info(folder)
     if mp_info:
         processing_keys = set()
         if "PROCESSING" in c3d_file['parameters']:
@@ -359,12 +374,6 @@ def process_c3d_file(c3d_path, data_filter_dict):
     meta = filter_dict_by_keywords(meta, data_filter_dict.get("meta", []))
     point_rate = c3d_file['parameters']['POINT']['RATE']['value'][0]
     analog_rate = c3d_file['parameters']['ANALOG']['RATE']['value'][0]
-    analog_first = c3d_file['header']['analogs']['first_frame']
-    analog_last = c3d_file['header']['analogs']['last_frame']
-    meta["point_rate"] = point_rate
-    meta["analog_rate"] = analog_rate
-    meta["analog_first"] = analog_first
-    meta["analog_last"] = analog_last
     meta["header"] = c3d_file.get("header", {})
 
     events = extract_event_times_and_labels(c3d_path)
@@ -394,25 +403,25 @@ def process_c3d_file(c3d_path, data_filter_dict):
     n_frames = points.shape[0]
     frames_vector = np.arange(0, n_frames) + actual_start
     timeC3D = frames_vector / point_rate - 1/point_rate
+    # Build the full point dictionary (internal use)
     point_struct = {"time": timeC3D.tolist(), "frames": frames_vector.tolist()}
     used_point_labels = set()
-    # Get generic point filter from data_filter_dict
     point_filter = data_filter_dict.get("point", [])
-    # Build a list of kinetic targets from left and right (ensure they are always included)
-    kinetic_targets = []
-    kinetic_targets += data_filter_dict.get("left_kinetic_target", [])
-    kinetic_targets += data_filter_dict.get("right_kinetic_target", [])
-    kinetic_targets = flatten_targets(kinetic_targets)
+    kinetic_targets = flatten_targets(data_filter_dict.get("left_kinetic_target", []) + data_filter_dict.get("right_kinetic_target", []))
     kinetic_targets_lower = [t.lower() for t in kinetic_targets]
 
     for i, lab in enumerate(raw_point_labels):
         lab_stripped = lab.strip()
+        # --- If SUBJECTS= was found, remove a prepended subject if its prefix matches any subject ---
+        if subject_list and ":" in lab_stripped:
+            prefix, remainder = lab_stripped.split(":", 1)
+            if any(sub in prefix.strip().lower() for sub in subject_list):
+                lab_stripped = remainder.strip()
         if lab_stripped.startswith("*"):
             continue
-        # If a point filter is specified, only export channels matching one of the keywords,
-        # unless the marker is a kinetic target.
-        if point_filter and (lab_stripped.lower() not in kinetic_targets_lower) and \
-           not any(kw.lower() in lab_stripped.lower() for kw in point_filter):
+        # Always include a marker if it is a kinetic target,
+        # even if it is not in the JSON "point" list.
+        if point_filter and (lab_stripped.lower() not in set(pt.lower() for pt in point_filter)) and (lab_stripped.lower() not in kinetic_targets_lower):
             continue
         unique_label = get_unique_field_label(lab_stripped, used_point_labels)
         point_struct[unique_label] = points[:, i, :]
@@ -441,15 +450,23 @@ def process_c3d_file(c3d_path, data_filter_dict):
     if PRINT_LABELS:
         logger("[label]Raw Analog Labels for " + c3d_path + " : " + str(raw_analog_labels))
 
-    extracted = {
-        "meta": meta,
-        "events": events,
-        "point": point_struct,
-        "analog": analog_struct
-    }
-
-    # --- Run the kinetic validity check ---
+    extracted = {"meta": meta, "events": events, "point": point_struct, "analog": analog_struct}
+    # Run kinetic validity check using the full point dictionary.
     check_kinetic_validity(extracted, data_filter_dict)
+    
+    # --- Final Filtering for Export ---
+    # If the JSON "point" list is provided, remove any markers from the exported point data
+    # that are not part of that list (except for 'time' and 'frames').
+    allowed_points = data_filter_dict.get("point", [])
+    if allowed_points:
+        allowed_set = set(pt.lower() for pt in allowed_points)
+        filtered_points = {"time": extracted["point"]["time"], "frames": extracted["point"]["frames"]}
+        for key, value in extracted["point"].items():
+            if key in ("time", "frames"):
+                continue
+            if key.lower() in allowed_set:
+                filtered_points[key] = value
+        extracted["point"] = filtered_points
 
     return extracted
 
@@ -473,7 +490,7 @@ def file_matches_filter(c3d_path, filter_type, keywords):
             with open(enf_path, 'r') as f:
                 for line in f:
                     if line.startswith('DESCRIPTION='):
-                        description = line.split('=')[1].strip().replace(' ', '_')
+                        description = line.split('=', 1)[1].strip().replace(' ', '_')
                         break
         except Exception as e:
             logger(f"Error reading {enf_path}: {e}")
@@ -493,24 +510,33 @@ def process_folder(filter_type, keywords, data_filter_dict, source_root, output_
     c3d_files = find_c3d_files(source_root)
     logger(f"Found {len(c3d_files)} C3D files.")
     processed_count = 0
+    crash_log_path = os.path.join(os.getcwd(), "crash_report.log")
     for file_path in c3d_files:
         if not file_matches_filter(file_path, filter_type, keywords):
             continue
-        extracted = process_c3d_file(file_path, data_filter_dict)
-        rel_path = os.path.relpath(os.path.dirname(file_path), source_root)
-        out_folder = os.path.join(output_root, rel_path)
-        os.makedirs(out_folder, exist_ok=True)
-        base_name = os.path.splitext(os.path.basename(file_path))[0]
-        out_file = os.path.join(out_folder, base_name + ".mat")
-        savemat(out_file, extracted)
-        logger(f"Saved extracted data to {out_file}")
-        processed_count += 1
+        try:
+            extracted = process_c3d_file(file_path, data_filter_dict)
+            rel_path = os.path.relpath(os.path.dirname(file_path), source_root)
+            out_folder = os.path.join(output_root, rel_path)
+            os.makedirs(out_folder, exist_ok=True)
+            base_name = os.path.splitext(os.path.basename(file_path))[0]
+            out_file = os.path.join(out_folder, base_name + ".mat")
+            savemat(out_file, extracted)
+            logger(f"Saved extracted data to {out_file}")
+            processed_count += 1
+        except Exception as e:
+            error_message = f"Error processing {file_path}: {str(e)}\n" + traceback.format_exc() + "\n"
+            logger(error_message)
+            with open(crash_log_path, "a") as crash_log:
+                crash_log.write(error_message)
+        finally:
+            # Force garbage collection to free memory after each file.
+            gc.collect()
     logger(f"Finished processing. {processed_count} files were extracted and saved.")
 
 # -------------------------------
-# PyQt5 UI Version
+# PyQt5 UI Version (unchanged)
 # -------------------------------
-
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
@@ -520,7 +546,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.loadDataFilterDict()
 
     def initUI(self):
-        # Create Menu Bar with "Settings" menu
         menubar = self.menuBar()
         settingsMenu = menubar.addMenu("Settings")
         loadJsonAction = QtWidgets.QAction("Load JSON", self)
@@ -530,18 +555,14 @@ class MainWindow(QtWidgets.QMainWindow):
         aboutAction = QtWidgets.QAction("About", self)
         aboutAction.triggered.connect(self.showAbout)
         settingsMenu.addAction(aboutAction)
-
         centralWidget = QtWidgets.QWidget()
         self.setCentralWidget(centralWidget)
         layout = QtWidgets.QVBoxLayout()
         centralWidget.setLayout(layout)
-
         titleLabel = QtWidgets.QLabel("C3D to MAT Converter")
         titleLabel.setAlignment(QtCore.Qt.AlignCenter)
         titleLabel.setStyleSheet("font-size: 24px; font-weight: bold;")
         layout.addWidget(titleLabel)
-
-        # Source folder
         hboxSource = QtWidgets.QHBoxLayout()
         self.sourceLineEdit = QtWidgets.QLineEdit()
         self.sourceLineEdit.setPlaceholderText("Select source folder")
@@ -553,8 +574,6 @@ class MainWindow(QtWidgets.QMainWindow):
         hboxSource.addWidget(self.sourceLineEdit)
         hboxSource.addWidget(self.sourceBrowseButton)
         layout.addLayout(hboxSource)
-
-        # Output folder
         hboxOutput = QtWidgets.QHBoxLayout()
         self.outputLineEdit = QtWidgets.QLineEdit()
         self.outputLineEdit.setPlaceholderText("Select output folder")
@@ -566,18 +585,14 @@ class MainWindow(QtWidgets.QMainWindow):
         hboxOutput.addWidget(self.outputLineEdit)
         hboxOutput.addWidget(self.outputBrowseButton)
         layout.addLayout(hboxOutput)
-
-        # Filter type row (now above keywords)
         hboxFilter = QtWidgets.QHBoxLayout()
         self.filterComboBox = QtWidgets.QComboBox()
-        self.filterComboBox.addItems(["enf", "all", "filename"])  # default "enf"
+        self.filterComboBox.addItems(["enf", "all", "filename"])
         self.filterComboBox.setToolTip("Select the filtering method:\n'enf' - filter based on ENF DESCRIPTION (default)\n'all' - process all files\n'filename' - filter based on filename.")
         self.filterComboBox.currentIndexChanged.connect(self.updateKeywordsPlaceholder)
         hboxFilter.addWidget(QtWidgets.QLabel("Filter Type:"))
         hboxFilter.addWidget(self.filterComboBox)
         layout.addLayout(hboxFilter)
-
-        # Keywords row
         hboxKeywords = QtWidgets.QHBoxLayout()
         self.keywordsLineEdit = QtWidgets.QLineEdit()
         self.keywordsLineEdit.setPlaceholderText("Enter keywords for ENF description")
@@ -585,20 +600,14 @@ class MainWindow(QtWidgets.QMainWindow):
         hboxKeywords.addWidget(QtWidgets.QLabel("Keywords:"))
         hboxKeywords.addWidget(self.keywordsLineEdit)
         layout.addLayout(hboxKeywords)
-
-        # Print labels checkbox (also used for kinetic debug output)
         self.printCheckBox = QtWidgets.QCheckBox("Print raw point and analog labels (also enables kinetic debug)")
         self.printCheckBox.setToolTip("If checked, raw labels and kinetic debug output will be printed to the log in 9pt font.")
         layout.addWidget(self.printCheckBox)
-
-        # Run conversion button
         self.runButton = QtWidgets.QPushButton("Run Conversion")
         self.runButton.setStyleSheet("background-color: #007BFF; color: white; font-size: 16px;")
         self.runButton.setToolTip("Click to start the conversion process.")
         self.runButton.clicked.connect(self.runConversion)
         layout.addWidget(self.runButton)
-
-        # Log output
         self.logTextEdit = QtWidgets.QTextEdit()
         self.logTextEdit.setReadOnly(True)
         self.logTextEdit.setStyleSheet("background-color: #f0f0f0;")
@@ -672,7 +681,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def runConversion(self):
         global DEBUG_KINETIC
-        # Set kinetic debug flag based on the checkbox state.
         DEBUG_KINETIC = self.printCheckBox.isChecked()
         source = self.sourceLineEdit.text().strip()
         output = self.outputLineEdit.text().strip()
@@ -684,14 +692,13 @@ class MainWindow(QtWidgets.QMainWindow):
         filter_type = self.filterComboBox.currentText().lower()
         global PRINT_LABELS, logger
         PRINT_LABELS = self.printCheckBox.isChecked()
-        logger = self.log  # Set global logger to UI log function
+        logger = self.log
         self.log("Starting conversion...")
         process_folder(filter_type, keywords, self.data_filter_dict, self.sourceLineEdit.text(), self.outputLineEdit.text())
         self.log("Conversion finished.")
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    # Set application-wide tooltip style: black text on light grey background.
     app.setStyleSheet("QToolTip { color: black; background-color: #f0f0f0; border: 1px solid black; }")
     mainWin = MainWindow()
     mainWin.show()
