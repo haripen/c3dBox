@@ -2,6 +2,9 @@
 
 This GUI follows the step 1 [`C3D to MAT Converter`](https://github.com/haripen/c3dBox/tree/main/Step1_c3d_to_mat) and splits the gernerated `.mat` files based on C3D file event labels and [JSON](https://github.com/haripen/c3dBox/blob/main/Step2_split_by_event/cycle_config.json)-defined cycle-definitions to `.mat` files with time-discrete but segmented data.
 
+## Prerequesits
+Install Anaconda and create the `c3d_to_matCycles` environment from the [root folder](https://github.com/haripen/c3dBox/) of this repository.
+
 ## Features
 
 - **Event-Based Splitting**: Split `.mat` files using configurable event labels.
@@ -11,7 +14,7 @@ This GUI follows the step 1 [`C3D to MAT Converter`](https://github.com/haripen/
   - **Metadata Inclusion:** All relevant metadata preserved in split files.
 - **Logging Support:** Optional verbose logging to debug or fine-tune splitting behavior.
 
----
+
 
 ## Usage
 
