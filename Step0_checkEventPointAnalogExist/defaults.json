@@ -1,0 +1,40 @@
+{
+  "keywords": ["__all"],
+  "static_keyword": "stand",
+  "extra_markers": [
+    "RThoraxAngles", "LThoraxAngles", "LPelvisAngles", "RPelvisAngles",
+    "LFootProgressAngles", "RFootProgressAngles", "LHipAngles", "RHipAngles",
+    "LKneeAngles", "RKneeAngles", "LAnkleAngles", "RAnkleAngles"
+  ],
+  "analog_labels": [
+    "EMG.EMG_01_R M.tibialis anterior",
+    "EMG.EMG_02_R M.peroneus long.",
+    "EMG.EMG_03_R M.gastro. lat.",
+    "EMG.EMG_04_R M.gastroc.med.",
+    "EMG.EMG_05_R M.soleus",
+    "EMG.EMG_06_R M.rectus fem.",
+    "EMG.EMG_07_R M.gluteus maximus",
+    "EMG.EMG_08_R M. gluteus medius",
+    "EMG.EMG_09_R M.vastus lat.",
+    "EMG.EMG_10_R M.vastus med.",
+    "EMG.EMG_11_R M.semitendinosus",
+    "EMG.EMG_12_R M.biceps femoris",
+    "EMG.EMG_13_R M.erector spine",
+    "EMG.EMG_17_L M.tibialis anterior",
+    "EMG.EMG_18_L M.peroneus long.",
+    "EMG.EMG_19_L M.gastro. lat.",
+    "EMG.EMG_20_L M.gastroc.med.",
+    "EMG.EMG_21_L M.vastus lat.",
+    "EMG.EMG_22_L M.vastus med.",
+    "EMG.EMG_23_L M.semitendinosus",
+    "EMG.EMG_24_L M.biceps femoris",
+    "EMG.EMG_25_L M.soleus",
+    "EMG.EMG_26_L M.rectus fem.",
+    "EMG.EMG_27_L M.erector spine",
+    "EMG.EMG_31_L M.gluteus maximus",
+    "EMG.EMG_32_L M. gluteus medius"
+  ],
+  "left_seq": ["Left Foot Strike", "Left Foot Off", "Left Foot Strike"],
+  "right_seq": ["Right Foot Strike", "Right Foot Off", "Right Foot Strike"],
+  "additional_event_label": ""
+}
