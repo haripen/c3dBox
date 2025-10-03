@@ -64,18 +64,15 @@ Contributions via issues or pull requests are welcome!
 
 ---
 
-## Importing data in Matlab and Python
+## Loading the .mat in Python
 
-Use the following snippet after importing `.mat` files to convert event labels into MATLAB cell strings:
-
-```matlab
-events.event_labels = cellstr(events.event_labels);
-```
-
-In Python, use:
+Use the following snippet from the root level of the package:
 
 ```python
+filepath_mat = r'.\example\mat\split_to_cycles\walk_splitCycles.mat'
 from utils_py.mat2dict import loadmat_to_dict
+imported_mat = loadmat_to_dict(filepath_mat)
+print(imported_mat["events"]["event_labels"])
 ```
 ---
 
