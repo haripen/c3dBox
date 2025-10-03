@@ -12,8 +12,8 @@ Install Anaconda and create the `c3d_to_matCycles` environment from the [root fo
 Activate the conda environment, navigate to the folder, and run the script:
 ```powershell
 conda activate c3d_to_matCycles
-cd .\Step0_checkEventPointExist\
-python .\chekEventPointExist.py
+cd .\Step0_checkEventPointAnalogExist\
+python .\chekEventPointAnalogExist.py
 ```
 Then follow the instructions.
 
@@ -48,14 +48,14 @@ This project is licensed under the [MIT License](https://opensource.org/licenses
 ---
 ### If you like, you can building an executable
 
-Build a standalone executable using PyInstaller:
+Build a standalone executable using PyInstaller (navigate to the folder):
 
 ```bash
-pyinstaller --onefile --windowed c3d_checker.py
+pyinstaller --onefile --windowed chekEventPointAnalogExist.py
 ```
 
 or with UPX Compression (Optional, if UPX is installed and extracted to `C:\upx`, you can compress the executable by adding the `--upx-dir` option):
 
 ```bash
-pyinstaller --onefile --windowed --upx-dir="C:\upx" c3d_checker.py
+pyinstaller --onefile --windowed --upx-dir="C:\upx" chekEventPointAnalogExist.py
 ```
