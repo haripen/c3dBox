@@ -50,6 +50,66 @@ def log_crash(message):
     except Exception as e:
         logger("Could not write crash report: " + str(e))
 
+# --- Helpers to normalize MATLAB-loaded data to Python-native types ---
+def _as_matlab_cellstr(seq):
+    """Return Nx1 object array so scipy.io.savemat writes a MATLAB cell array of strings."""
+    return np.array([str(s) for s in seq], dtype=object).reshape(-1, 1)
+
+def _to_1d_float_list(x):
+    """Coerce MATLAB numeric vectors (row/col) to Python list[float]."""
+    arr = np.asarray(x)
+    # MATLAB structs via scipy can wrap scalars in arrays-of-arrays; unwrap gently
+    if arr.dtype == object:
+        # e.g., array([[array([1.0]), array([2.0])]], dtype=object)
+        flat = []
+        for elem in arr.ravel():
+            flat.extend(np.asarray(elem).ravel().tolist())
+        return [float(v) for v in flat]
+    return arr.astype(float).ravel().tolist()
+
+def _labels_to_list(labels):
+    """
+    Convert event_labels from various MATLAB encodings to list[str]:
+      - cell array of char: dtype=object, shapes (N,1), (1,N), (N,)
+      - char matrix: dtype kind in {'U','S'}, shape (N,M)
+      - nested object arrays containing 1xM char arrays
+    """
+    # Already a Python list/tuple of strings?
+    if isinstance(labels, (list, tuple)):
+        return [str(s).strip() for s in labels]
+
+    arr = np.asarray(labels)
+
+    # Case 1: char matrix (NxM of single characters)
+    if arr.ndim == 2 and arr.dtype.kind in ("U", "S"):
+        return ["".join(row).strip() for row in arr.tolist()]
+
+    # Case 2: object array (typical for MATLAB cell arrays)
+    if arr.dtype == object:
+        out = []
+        for elem in arr.ravel():
+            # elem can itself be a small char array or a scalar string/bytes
+            if isinstance(elem, (str, np.str_)):
+                out.append(str(elem).strip())
+            elif isinstance(elem, bytes):
+                out.append(elem.decode("utf-8", "ignore").strip())
+            elif isinstance(elem, np.ndarray):
+                if elem.dtype.kind in ("U", "S"):            # small char array
+                    out.append("".join(elem.ravel().tolist()).strip())
+                elif elem.dtype == object and elem.size:     # nested cell
+                    # recurse once to unwrap inner cell/char content
+                    inner = _labels_to_list(elem)
+                    if inner:
+                        out.append(inner[0].strip())
+                else:
+                    out.append(str(elem).strip())
+            else:
+                out.append(str(elem).strip())
+        return out
+
+    # Fallback: best-effort string conversion
+    return [str(s).strip() for s in arr.ravel().tolist()]
+
 # -------------------------------
 # Conversion Functions for MAT Files
 # -------------------------------
@@ -76,7 +136,12 @@ def process_mat_file(mat_path, cycles_from_to, show_keys=False):
         logger(f"Error loading {mat_path}: {e}")
         log_crash(f"Error loading {mat_path}: {e}")
         return False
-
+    
+    event_times  = _to_1d_float_list(data_dict['events']['event_times'])
+    event_labels = _labels_to_list(data_dict['events']['event_labels'])
+    data_dict['events']['event_times']  = event_times
+    data_dict['events']['event_labels'] = event_labels
+    
     if show_keys:
         logger("AVAILABLE KEYS: Loaded MAT file keys:")
         for key, value in data_dict.items():
@@ -92,9 +157,6 @@ def process_mat_file(mat_path, cycles_from_to, show_keys=False):
         'event_labels' not in data_dict['events']):
         logger(f"File {mat_path} does not contain valid 'events' data. Skipping.")
         return False
-
-    event_times = data_dict['events']['event_times']
-    event_labels = data_dict['events']['event_labels']
     
     # --- Detect scheme ---
     threshold_simultaneous = 0.02  # tolerance for matching events in exercise mode
@@ -170,16 +232,26 @@ def process_mat_file(mat_path, cycles_from_to, show_keys=False):
 
     if 'meta' in data_dict:
         cycle_data['meta'] = data_dict['meta']
-    if 'events' in data_dict:
+    if 'events' in data_dict:     
         cycle_data['events'] = data_dict['events']
-    
+
+        # --- ensure MATLAB-friendly types ---
+        ev = dict(cycle_data['events'])  # shallow copy
+        ev_labels_list = _labels_to_list(ev.get('event_labels', []))
+        ev_times_list  = _to_1d_float_list(ev.get('event_times', []))
+
+        ev['event_labels'] = _as_matlab_cellstr(ev_labels_list)                # -> Nx1 cellstr
+        ev['event_times']  = np.asarray(ev_times_list, dtype=float).reshape(-1, 1)  # -> Nx1 double
+
+        cycle_data['events'] = ev
+  
     folder, filename = os.path.split(mat_path)
     base, ext = os.path.splitext(filename)
     out_filename = base + "_splitCycles.mat"
     out_file = os.path.join(folder, out_filename)
     
     try:
-        scipy.io.savemat(out_file, cycle_data)
+        scipy.io.savemat(out_file, cycle_data, oned_as='column')
         logger(f"Saved split cycles to {out_file}")
     except Exception as e:
         logger(f"Error saving {out_file}: {e}")

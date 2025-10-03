@@ -172,12 +172,9 @@ def extract_event_times_and_labels(c3d_path):
         logger(f"Warning: could not extract events from {c3d_path}: {e}")
         sorted_times, sorted_labels = [], []
     trimmed_labels = [lab.strip() for lab in sorted_labels]
-    if trimmed_labels:
-        max_len = max(len(lab) for lab in trimmed_labels)
-        padded = np.array([list(lab.ljust(max_len)) for lab in trimmed_labels])
-    else:
-        padded = np.empty((0,0))
-    return {"event_times": list(sorted_times), "event_labels": padded}
+    # -> Nx1 object array so MATLAB sees a cell array of strings
+    cell_labels = np.array(trimmed_labels, dtype=object).reshape(-1, 1)
+    return {"event_times": list(sorted_times), "event_labels": cell_labels}
 
 def process_field_label(label):
     label = label.strip()
@@ -382,17 +379,15 @@ def process_c3d_file(c3d_path, data_filter_dict):
     if ev_keywords:
         filtered_times = []
         filtered_labels = []
-        for t, lab in zip(events["event_times"], events["event_labels"]):
-            lab_str = "".join(lab).strip()
+        for t, lab in zip(events["event_times"], events["event_labels"].ravel()):
+            lab_str = str(lab).strip()
             if any(kw.lower() in lab_str.lower() for kw in ev_keywords):
                 filtered_times.append(t)
                 filtered_labels.append(lab_str)
-        if filtered_labels:
-            max_len = max(len(lab) for lab in filtered_labels)
-            padded = np.array([list(lab.ljust(max_len)) for lab in filtered_labels])
-        else:
-            padded = np.empty((0,0))
-        events = {"event_times": filtered_times, "event_labels": padded}
+
+        # -> Nx1 object array (cell array in MATLAB)
+        cell_filtered = np.array(filtered_labels, dtype=object).reshape(-1, 1)
+        events = {"event_times": filtered_times, "event_labels": cell_filtered}
 
     # --- Updated Point (marker) data extraction ---
     raw_point_labels = c3d_file['parameters']['POINT']['LABELS']['value']
