@@ -11,7 +11,7 @@ Environment Setup
   
 3. Extract the ZIP file to a desired folder
   
-4. In Anaconda Prompt Command Line (or terminal on macOS) with admin privileges, use ``cd My_Path`` or ``cd /d MyPathOnAnotherDrive`` to switch to the folder where you extraxted the ZIP content to.
+4. In Anaconda Prompt Command Line with admin privileges, use ``cd My_Path`` or ``cd /d MyPathOnAnotherDrive`` to switch to the folder where you extraxted the ZIP content to.  On macOS terminal you'll have to use `/` instead of `\` when setting paths.
 
 To run all steps of this repository in one Conda environment after downloading the repository, create the Conda `c3d_to_matCycles` environment using `Anaconda Prompt` with admin privileges. Having navigated to the root folder of the downloaded repository, run the following command:
 ```powershell
