@@ -46,7 +46,7 @@ Both log files document all user-defined inputs, chosen directories, and timesta
 This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).
 
 ---
-### If you like, you can building an executable
+### If you like, you can build an executable
 
 Build a standalone executable using PyInstaller (navigate to the folder):
 
