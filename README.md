@@ -36,3 +36,5 @@ dependencies:
 Check out the folders for tools and infos on the steps.
 
 **Thanks** to Sebastian Durstberger for showing me the hidden depths of C3D files!
+---
+License: [MIT License](https://github.com/haripen/c3dBox/blob/main/LICENSE)
