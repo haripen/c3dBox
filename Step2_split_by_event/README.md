@@ -1,26 +1,11 @@
 # [Step 2] Split C3D-MAT to Cycles
 
-This GUI or script follows the ``C3D to MAT Converter`` and splits its `.mat` files based on C3D file event labels. It features file selection, cycle definition by event labels via JSON, and structured export of segmented MAT files.
-
-Use the following snippet after importing `.mat` files to convert event labels into MATLAB cell strings:
-
-```matlab
-events.event_labels = cellstr(events.event_labels);
-```
-
-In Python, use:
-
-```python
-from utils_py.mat2dict import loadmat_to_dict
-```
-
----
+This GUI follows the step 1 [`C3D to MAT Converter`](https://github.com/haripen/c3dBox/tree/main/Step1_c3d_to_mat) and splits the gernerated `.mat` files based on C3D file event labels and [JSON](https://github.com/haripen/c3dBox/blob/main/Step2_split_by_event/cycle_config.json)-defined cycle-definitions to `.mat` files with time-discrete but segmented data.
 
 ## Features
 
-- **GUI**: PyQt5-based interface with tooltips for ease of use.
 - **Event-Based Splitting**: Split `.mat` files using configurable event labels.
-- **JSON-Based Splitting Criteria**: Load custom cycle definition from a JSON configuration file.
+- **JSON-Based Splitting Criteria**: Load cycle definition from a JSON configuration file automatically at startup or manually from the settings.
 - **Data Organization:**
   - **Event-Driven Splitting:** Files are segmented based on specified event labels.
   - **Metadata Inclusion:** All relevant metadata preserved in split files.
@@ -28,52 +13,12 @@ from utils_py.mat2dict import loadmat_to_dict
 
 ---
 
-## Environment Setup
-
-Use the provided YAML file to set up the Conda environment:
-
-```bash
-conda env create -f split_c3dmat_to_cycles.yml
-conda activate split_c3dmat_to_cycles
-```
-
-YAML Example:
-
-```yml
-name: split_c3dmat_to_cycles
-channels:
-  - conda-forge
-dependencies:
-  - python=3.8
-  - pyqt
-  - numpy
-  - scipy
-```
-
----
-
-## Creating an Executable
-
-To create a standalone executable using PyInstaller with optional UPX compression:
-
-```bash
-pyinstaller --onefile --windowed --upx-dir "C:\upx-5.0.0-win64" split_by_event_pyqt.py
-```
-
----
-
 ## Usage
 
-Run the executable or launch via:
+Start the graphical user interface from the root folder:
 
 ```bash
-python split_by_event_pyqt.py
-```
-
-Or run the script version:
-
-```bash
-python split_by_event.py
+python .\Step2_split_by_event\split_by_event_pyqt.py
 ```
 
 Steps:
@@ -86,9 +31,9 @@ Steps:
    
    - Choose event markers for splitting files (e.g., start/end events).
 
-3. **Load JSON Configuration (Optional):**
+3. **Load JSON Configuration Manually (Optional):**
    
-   - Load predefined splitting criteria from a JSON file.
+   - Load predefined splitting criteria from a JSON file from the settings menu.
 
 4. **Run Splitting:**
    
@@ -112,13 +57,32 @@ Customize event labels and settings as needed.
 
 ## Credits & License
 
-- Author: Harald Penasso with ChatGPT assistance
+- Author: Harald Penasso with ChatGPT 4 assistance
 - License: MIT License
 
-Dependencies:
-
-- PyQt5
-- numpy
-- scipy
-
 Contributions via issues or pull requests are welcome!
+
+---
+
+## Importing data in Matlab and Python
+
+Use the following snippet after importing `.mat` files to convert event labels into MATLAB cell strings:
+
+```matlab
+events.event_labels = cellstr(events.event_labels);
+```
+
+In Python, use:
+
+```python
+from utils_py.mat2dict import loadmat_to_dict
+```
+---
+
+## If you like, create an executable
+
+To create a standalone executable using PyInstaller with optional UPX compression:
+
+```bash
+pyinstaller --onefile --windowed --upx-dir "C:\upx-5.0.0-win64" split_by_event_pyqt.py
+```
