@@ -12,8 +12,7 @@ Install Anaconda and create the `c3d_to_matCycles` environment from the [root fo
 Activate the conda environment, navigate to the folder, and run the script:
 ```powershell
 conda activate c3d_to_matCycles
-cd .\Step0_checkEventPointAnalogExist\
-python .\chekEventPointAnalogExist.py
+python .\Step0_checkEventPointAnalogExist\checkEventPointAnalogExist.py
 ```
 Then follow the instructions.
 
