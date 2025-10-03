@@ -1,6 +1,6 @@
 # C3D Consistency Checker
 
-This script checks `.c3d` files within a specified directory structure for consistency in event markers, point, and analog data, based on user-defined sequences and keywords defined in [`defaults.json`](https://github.com/haripen/c3dBox/Step0_checkEventPointExist/defaults.json).
+This script checks `.c3d` files within a specified directory structure for consistency in event markers, point, and analog data, based on user-defined sequences and keywords defined in [`defaults.json`](https://github.com/haripen/c3dBox/blob/main/Step0_checkEventPointAnalogExist/defaults.json).
 
 **Author:** Harald Penasso  
 Co-developed with: GPT-4/5
