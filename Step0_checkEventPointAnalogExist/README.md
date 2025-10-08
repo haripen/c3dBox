@@ -12,8 +12,7 @@ Install Anaconda and create the `c3d_to_matCycles` environment from the [root fo
 Activate the conda environment, navigate to the folder, and run the script:
 ```powershell
 conda activate c3d_to_matCycles
-cd .\Step0_checkEventPointAnalogExist\
-python .\chekEventPointAnalogExist.py
+python .\Step0_checkEventPointAnalogExist\checkEventPointAnalogExist.py
 ```
 Then follow the instructions.
 
@@ -46,7 +45,7 @@ Both log files document all user-defined inputs, chosen directories, and timesta
 This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).
 
 ---
-### If you like, you can building an executable
+### If you like, you can build an executable
 
 Build a standalone executable using PyInstaller (navigate to the folder):
 

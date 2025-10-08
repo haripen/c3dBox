@@ -12,6 +12,10 @@ This GUI or script convert C3D files into MATLAB MAT files using ezC3D and PyQt5
   - **Point and Analog Data:** Organized clearly with unique, MATLAB-friendly field names and filtered according to user criteria.
 
 - **Logging:** Optional detailed logging of raw data labels for setting up the JSON or for debugging.
+  
+## Prerequesits
+
+Install Anaconda and create the `c3d_to_matCycles` environment from the [root folder](https://github.com/haripen/c3dBox/) of this repository.
 
 ## Usage
 
