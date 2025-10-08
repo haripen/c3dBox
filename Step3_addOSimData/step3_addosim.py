@@ -43,8 +43,8 @@ from utils_py.osim_access import load_osimFile  # universal loader → DataFrame
 # Configuration & Constants
 # ------------------------
 
-DEFAULT_MAT_ROOT  = r"C:\Data_Local\opensim_WalkA_extracted_upd\Rd0001_Rd0001_1993_06_18\2022_10_25\matfiles\2022_10_25\openSim"
-DEFAULT_OSIM_ROOT = r"C:\Data_Local\opensim_WalkA_extracted_upd\Rd0001_Rd0001_1993_06_18\2022_10_25\openSim"
+DEFAULT_MAT_ROOT  = r"MAT_Root"
+DEFAULT_OSIM_ROOT = r"OSIM_Root"
 
 OSIM_JSON_NAME       = "osim_outputs.json"
 SHORTLABELS_JSONNAME = "shortlabels_osim_outputs.json"
