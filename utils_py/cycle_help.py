@@ -84,7 +84,7 @@ def extract_cycle_periods(event_times, event_labels, cycles_from_to):
     return cycles
 
 # --- Split point and analog data by cycles ---
-def split_data_by_cycles(data_dict, cycle_periods, cycles_from_to):
+def split_data_by_cycles(data_dict, cycle_periods, cycles_from_to, add_contralateral=False):
     """
     Split the point and analog data into cycle segments based on cycle_periods.
     
@@ -94,6 +94,10 @@ def split_data_by_cycles(data_dict, cycle_periods, cycles_from_to):
     Additionally, if data_dict['events'] contains a 'kinetic' field, the kinetic flag for the 
     cycle is determined from the event closest to the cycle’s start time and added as a new key 
     'kinetic' in the cycle instance.
+    
+    Optionally (when add_contralateral=True), for gait locomotion cycles (left_stride/right_stride)
+    the function also adds the contralateral *_Foot_Off event with time, frame, and percent
+    (or NaN if not found).
     
     Returns:
         dict: A nested dictionary structured as:
@@ -114,9 +118,12 @@ def split_data_by_cycles(data_dict, cycle_periods, cycles_from_to):
     global_pt_frames = np.array(data_dict['point']['frames'])
     global_an_time = np.array(data_dict['analog']['time'])
     
+    # Events used for contralateral Foot Off lookup (and kinetic if present)
+    ev_times  = np.array(data_dict['events']['event_times'], dtype=float) if 'events' in data_dict else np.array([])
+    ev_labels = list(data_dict['events']['event_labels']) if 'events' in data_dict else []
+    
     # Retrieve event times and kinetic flags if available.
-    if 'kinetic' in data_dict['events']:
-        event_times = np.array(data_dict['events']['event_times'])
+    if 'events' in data_dict and 'kinetic' in data_dict['events']:
         kinetic_flags = data_dict['events']['kinetic']
     else:
         kinetic_flags = None
@@ -166,13 +173,81 @@ def split_data_by_cycles(data_dict, cycle_periods, cycles_from_to):
                     'frame': central_frame,
                     'percent': cycle_percentage
                 }
+                
+            # --- Add contralateral *_Foot_Off for locomotion (if requested) ---
+            # Only for typical gait cycles that have a central event: left/right_stride.
+            if add_contralateral and has_central and cycle_type in ('left_stride', 'right_stride'):
+                # Expected contralateral key to add into the cycle dict
+                expected_key = 'Right_Foot_Off' if cycle_type == 'left_stride' else 'Left_Foot_Off'
+
+                # Guard in case events are missing
+                if ev_times.size == 0 or not ev_labels:
+                    cycle_instance[expected_key] = {'time': np.nan, 'frame': np.nan, 'percent': np.nan}
+                else:
+                    # Central label in "spaced" form to match ev_labels (e.g., "Left Foot Off")
+                    central_text = cycles_from_to[cycle_type][1]  # e.g. "Left Foot Off"
+                    central_time = period[1]
+
+                    # 1) Find the index in ev_labels that corresponds to THIS cycle's central Foot Off,
+                    #    preferring the one whose timestamp is closest to period[1].
+                    cand_idx = [i for i, lab in enumerate(ev_labels) if lab == central_text]
+                    if cand_idx:
+                        diffs = [abs(ev_times[i] - central_time) for i in cand_idx]
+                        j = cand_idx[int(np.argmin(diffs))]
+                    else:
+                        # Fallback: nearest "* Foot Off" to central_time if exact label match is absent
+                        off_idx = [i for i, lab in enumerate(ev_labels) if 'Foot Off' in lab]
+                        if off_idx:
+                            diffs = [abs(ev_times[i] - central_time) for i in off_idx]
+                            j = off_idx[int(np.argmin(diffs))]
+                        else:
+                            j = None
+
+                    # 2) Walk backward to find the immediate previous "* Foot Off" (the contralateral one in locomotion).
+                    contra_time = np.nan
+                    contra_ok = False
+                    if j is not None:
+                        k = None
+                        for idx in range(j - 1, -1, -1):
+                            if 'Foot Off' in ev_labels[idx]:
+                                k = idx
+                                break
+                        if k is not None:
+                            # We found the previous Foot Off; ensure it is the contralateral side we expect.
+                            found_key = ev_labels[k].replace(' ', '_')  # "Right_Foot_Off" or "Left_Foot_Off"
+                            if found_key == expected_key:
+                                contra_time = float(ev_times[k])
+                                contra_ok = True
+
+                    # 3) Compute frame and percent if found and inside the cycle (good data should be inside).
+                    if contra_ok and not np.isnan(contra_time):
+                        pt_contra_idx = int(np.argmin(np.abs(global_pt_time - contra_time)))
+                        contra_frame = float(global_pt_frames[pt_contra_idx])
+                        cycle_duration = end_time - start_time
+                        contra_percent = np.nan
+                        if cycle_duration != 0:
+                            contra_percent = ((contra_time - start_time) / cycle_duration) * 100.0
+
+                        cycle_instance[expected_key] = {
+                            'time': contra_time,
+                            'frame': contra_frame,
+                            'percent': contra_percent
+                        }
+                    else:
+                        # Not found or not contralateral -> fill with NaNs per requirement
+                        cycle_instance[expected_key] = {'time': np.nan, 'frame': np.nan, 'percent': np.nan}
+            # --- end contralateral block ---
             
             # Set the kinetic flag based on the event closest to the cycle start time.
-            if kinetic_flags is not None:
-                idx = np.argmin(np.abs(event_times - start_time))
-                cycle_instance['kinetic'] = kinetic_flags[idx]
-            
+            if kinetic_flags is not None and ev_times.size:
+                idx = int(np.argmin(np.abs(ev_times - start_time)))
+                # Guard in case of any unexpected length mismatch
+                if idx < len(kinetic_flags):
+                    cycle_instance['kinetic'] = kinetic_flags[idx]
+                else:
+                    cycle_instance['kinetic'] = bool(kinetic_flags[-1])  # fallback
+
             cycle_key = "cycle" + str(cycle_num)
             cycle_data[cycle_type][cycle_key] = cycle_instance
-    
+            
     return cycle_data

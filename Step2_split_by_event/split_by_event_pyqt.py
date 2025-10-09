@@ -189,7 +189,7 @@ def process_mat_file(mat_path, cycles_from_to, show_keys=False):
 
     try:
         cycle_periods = extract_cycle_periods(event_times, event_labels, cycles_from_to)
-        cycle_data = split_data_by_cycles(data_dict, cycle_periods, cycles_from_to)
+        cycle_data = split_data_by_cycles(data_dict, cycle_periods, cycles_from_to,add_contralateral=(scheme == 'locomotion'))
     except Exception as e:
         logger(f"Error processing cycles in {mat_path}: {e}")
         log_crash(f"Error processing cycles in {mat_path}: {e}")
