@@ -32,9 +32,6 @@ PRINT_LABELS = False
 DEBUG_KINETIC = False
 logger = print
 
-# Default filtering dictionary (loaded via UI)
-data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
-
 # -------------------------------
 # Helper: Flatten kinetic target lists
 # -------------------------------
@@ -467,11 +464,12 @@ def process_c3d_file(c3d_path, data_filter_dict):
     return extracted
 
 def find_c3d_files(root_folder):
+    root = Path(root_folder)
     c3d_files = []
-    for dirpath, _, files in os.walk(root_folder):
+    for dirpath, _, files in os.walk(root):
         for file in files:
             if file.lower().endswith(".c3d"):
-                c3d_files.append(os.path.join(dirpath, file))
+                c3d_files.append(Path(dirpath) / file)
     return c3d_files
 
 def file_matches_filter(c3d_path, filter_type, keywords):
@@ -503,31 +501,52 @@ def file_matches_filter(c3d_path, filter_type, keywords):
 def process_folder(filter_type, keywords, data_filter_dict, source_root, output_root):
     logger(f"Processing C3D files in: {source_root}")
     logger(f"Output will be saved in: {output_root}")
-    c3d_files = find_c3d_files(source_root)
+
+    src_root = Path(source_root).resolve()
+    out_root = Path(output_root).resolve()
+
+    c3d_files = find_c3d_files(src_root)
     logger(f"Found {len(c3d_files)} C3D files.")
+
     processed_count = 0
-    crash_log_path = os.path.join(os.getcwd(), "crash_report.log")
+    crash_log_path = Path(os.getcwd()) / "crash_report.log"
+
     for file_path in c3d_files:
-        if not file_matches_filter(file_path, filter_type, keywords):
+        # Optional: skip files not matching the UI filter
+        if not file_matches_filter(str(file_path), filter_type, keywords):
             continue
+
         try:
-            extracted = process_c3d_file(file_path, data_filter_dict)
-            rel_path = os.path.relpath(os.path.dirname(file_path), source_root)
-            out_folder = os.path.join(output_root, rel_path)
-            os.makedirs(out_folder, exist_ok=True)
-            base_name = os.path.splitext(os.path.basename(file_path))[0]
-            out_file = os.path.join(out_folder, base_name + ".mat")
-            savemat(out_file, extracted)
+            # --- compute relative subfolder under the chosen root ---
+            try:
+                rel_dir = file_path.parent.resolve().relative_to(src_root)
+            except ValueError:
+                # Fallback if the file isn’t under src_root for any reason (symlinks, etc.)
+                rel_dir = Path(os.path.relpath(str(file_path.parent.resolve()), str(src_root)))
+
+            out_folder = out_root / rel_dir
+            out_folder.mkdir(parents=True, exist_ok=True)
+
+            out_file = out_folder / (file_path.stem + ".mat")
+
+            extracted = process_c3d_file(str(file_path), data_filter_dict)
+            savemat(str(out_file), extracted)
+
             logger(f"Saved extracted data to {out_file}")
             processed_count += 1
+
         except Exception as e:
-            error_message = f"Error processing {file_path}: {str(e)}\n" + traceback.format_exc() + "\n"
+            error_message = (
+                f"Error processing {file_path}: {str(e)}\n"
+                + traceback.format_exc()
+                + "\n"
+            )
             logger(error_message)
-            with open(crash_log_path, "a") as crash_log:
+            with open(crash_log_path, "a", encoding="utf-8") as crash_log:
                 crash_log.write(error_message)
         finally:
-            # Force garbage collection to free memory after each file.
             gc.collect()
+
     logger(f"Finished processing. {processed_count} files were extracted and saved.")
 
 # -------------------------------
@@ -538,6 +557,8 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle("C3D to MAT Converter")
         self.resize(800, 600)
+        # NEW: instance default so attributes exist even if load fails
+        self.data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
         self.initUI()
         self.loadDataFilterDict()
 
@@ -620,15 +641,33 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.keywordsLineEdit.setPlaceholderText("No keywords needed for 'all'")
             self.keywordsLineEdit.setToolTip("All files will be processed; keywords are ignored.")
+            
+    def _coerce_known_list_fields(self, d: dict) -> dict:
+        """
+        Keep ALL keys, but ensure the 4 canonical list fields are lists if present.
+        Never drops unknown/custom keys.
+        """
+        out = dict(d)  # shallow copy
+        for k in ("meta", "events", "point", "analog"):
+            if k in out and not isinstance(out[k], list):
+                out[k] = []  # or: list(out[k]) if you prefer conservative cast
+            elif k not in out:
+                out[k] = []
+        return out
+
+    def _load_json_file(self, path: Path) -> dict:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            raise ValueError("Root JSON must be an object/dict.")
+        # IMPORTANT: preserve all keys; only coerce/ensure the 4 list fields
+        return self._coerce_known_list_fields(data)
 
     def loadDataFilterDict(self):
         """
-        Load data_filter.json from the folder where this GUI's .py file lives.
-        Falls back to the executable's folder when frozen (e.g., PyInstaller).
-        Ensures keys: meta, events, point, analog (all lists).
+        Load data_filter.json from the app folder (or executable folder if frozen).
+        Preserves ALL keys from JSON; only enforces that meta/events/point/analog are lists.
         """
-        default_filter = {"meta": [], "events": [], "point": [], "analog": []}
-
         # Resolve the app directory robustly
         if getattr(sys, "frozen", False):  # bundled executable
             app_dir = Path(sys.executable).resolve().parent
@@ -636,45 +675,40 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 app_dir = Path(__file__).resolve().parent
             except NameError:
-                # __file__ can be missing in some interactive contexts
                 app_dir = Path.cwd()
 
         json_path = app_dir / "data_filter.json"
 
         if json_path.exists():
             try:
-                with open(json_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                if not isinstance(data, dict):
-                    raise ValueError("Root JSON must be an object/dict.")
-
-                # Merge with defaults and validate list types
-                merged = default_filter.copy()
-                for key in merged.keys():
-                    val = data.get(key, merged[key])
-                    merged[key] = val if isinstance(val, list) else merged[key]
-
-                self.data_filter_dict = merged
+                self.data_filter_dict = self._load_json_file(json_path)
                 self.log(f"Automatically loaded data_filter_dict from {json_path}")
+                # Optional: surface how many custom keys were loaded
+                extra_keys = [k for k in self.data_filter_dict.keys() if k not in ("meta","events","point","analog")]
+                if extra_keys:
+                    self.log(f"Loaded custom keys: {', '.join(extra_keys)}")
             except Exception as e:
-                self.log(f"Error loading {json_path}: {e}. Using default empty filter dict.")
-                self.data_filter_dict = default_filter
+                self.log(f"Error loading {json_path}: {e}. Using default empty filter lists, no custom keys.")
+                self.data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
         else:
-            self.log(f"{json_path.name} not found at {json_path}. Using default empty filter dict.")
-            self.data_filter_dict = default_filter
+            self.log(f"{json_path.name} not found at {json_path}. Using default empty filter lists.")
+            self.data_filter_dict = {"meta": [], "events": [], "point": [], "analog": []}
+
 
     def loadJson(self):
         json_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Load JSON Filter File", "", "JSON Files (*.json)")
         if json_path:
             try:
-                with open(json_path, "r") as f:
-                    self.data_filter_dict = json.load(f)
+                self.data_filter_dict = self._load_json_file(Path(json_path))
                 self.log(f"Loaded data_filter_dict from {json_path}")
+                extra_keys = [k for k in self.data_filter_dict.keys() if k not in ("meta","events","point","analog")]
+                if extra_keys:
+                    self.log(f"Loaded custom keys: {', '.join(extra_keys)}")
             except Exception as e:
                 self.log(f"Error loading {json_path}: {e}")
         else:
             self.log("No JSON file selected.")
+
 
     def browseSource(self):
         folder = QtWidgets.QFileDialog.getExistingDirectory(self, "Select Source Folder")
