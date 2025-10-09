@@ -96,8 +96,8 @@ def split_data_by_cycles(data_dict, cycle_periods, cycles_from_to, add_contralat
     'kinetic' in the cycle instance.
     
     Optionally (when add_contralateral=True), for gait locomotion cycles (left_stride/right_stride)
-    the function also adds the contralateral *_Foot_Off event with time, frame, and percent
-    (or NaN if not found).
+    the function also adds the contralateral *_Foot_Off and *_Foot_Strike events with time, frame,
+    and percent (or NaN if not found).
     
     Returns:
         dict: A nested dictionary structured as:
@@ -237,7 +237,65 @@ def split_data_by_cycles(data_dict, cycle_periods, cycles_from_to, add_contralat
                         # Not found or not contralateral -> fill with NaNs per requirement
                         cycle_instance[expected_key] = {'time': np.nan, 'frame': np.nan, 'percent': np.nan}
             # --- end contralateral block ---
-            
+            # --- Add contralateral *_Foot_Strike for locomotion (if requested) ---
+            if add_contralateral and cycle_type in ('left_stride', 'right_stride'):
+                expected_strike_key = 'Right_Foot_Strike' if cycle_type == 'left_stride' else 'Left_Foot_Strike'
+
+                # Guard if events are not present
+                if ev_times.size == 0 or not ev_labels:
+                    cycle_instance[expected_strike_key] = {'time': np.nan, 'frame': np.nan, 'percent': np.nan}
+                else:
+                    # Start event (e.g., "Left Foot Strike" for left_stride)
+                    start_text = cycles_from_to[cycle_type][0]   # e.g., "Left Foot Strike" or "Right Foot Strike"
+                    start_t = start_time
+
+                    # 1) Find the index of THIS cycle's start strike (nearest in time with matching label)
+                    cand_start_idx = [i for i, lab in enumerate(ev_labels) if lab == start_text]
+                    if cand_start_idx:
+                        diffs = [abs(ev_times[i] - start_t) for i in cand_start_idx]
+                        j0 = cand_start_idx[int(np.argmin(diffs))]
+                    else:
+                        # Fallback: nearest generic Foot Strike to start_t
+                        strike_idx = [i for i, lab in enumerate(ev_labels) if 'Foot Strike' in lab]
+                        if strike_idx:
+                            diffs = [abs(ev_times[i] - start_t) for i in strike_idx]
+                            j0 = strike_idx[int(np.argmin(diffs))]
+                        else:
+                            j0 = None
+
+                    # 2) The contralateral strike in normal locomotion is the NEXT "* Foot Strike" after the start strike
+                    contra_time = np.nan
+                    contra_ok = False
+                    if j0 is not None:
+                        k = None
+                        for idx in range(j0 + 1, len(ev_labels)):
+                            if 'Foot Strike' in ev_labels[idx]:
+                                k = idx
+                                break
+                        if k is not None:
+                            found_key = ev_labels[k].replace(' ', '_')   # "Right_Foot_Strike" or "Left_Foot_Strike"
+                            if found_key == expected_strike_key:
+                                contra_time = float(ev_times[k])
+                                # Optional: ensure it lies inside this cycle window [start_time, end_time]
+                                if (contra_time >= start_time) and (contra_time <= end_time):
+                                    contra_ok = True
+
+                    # 3) Compute frame and percent or fill NaNs
+                    if contra_ok and not np.isnan(contra_time):
+                        pt_contra_idx = int(np.argmin(np.abs(global_pt_time - contra_time)))
+                        contra_frame = float(global_pt_frames[pt_contra_idx])
+                        cycle_duration = end_time - start_time
+                        contra_percent = ((contra_time - start_time) / cycle_duration) * 100.0 if cycle_duration != 0 else np.nan
+
+                        cycle_instance[expected_strike_key] = {
+                            'time': contra_time,
+                            'frame': contra_frame,
+                            'percent': contra_percent
+                        }
+                    else:
+                        cycle_instance[expected_strike_key] = {'time': np.nan, 'frame': np.nan, 'percent': np.nan}
+            # --- end contralateral strike block ---
+
             # Set the kinetic flag based on the event closest to the cycle start time.
             if kinetic_flags is not None and ev_times.size:
                 idx = int(np.argmin(np.abs(ev_times - start_time)))
