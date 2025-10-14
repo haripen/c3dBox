@@ -8,7 +8,7 @@ import numpy as np
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import QMessageBox, QInputDialog
-from pathlib import Path
+
 
 from matplotlib.figure import Figure
 try:
@@ -240,9 +240,6 @@ class PlotCell(QtWidgets.QWidget):
         self.key_resolver = key_resolver or (lambda disp, stride: disp)
         self.fig = Figure(figsize=(3,2), layout="tight"); self.canvas = FigureCanvas(self.fig); self.ax = self.fig.add_subplot(111)
         self.nav = NavigationToolbar(self.canvas, self); self._strip_nav_ctrl_s(); self.nav.setIconSize(QtCore.QSize(14,14))
-        self._hover_pick_tol = 6  # pixels: picking tolerance for hover tooltips
-        self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
-        self._last_hovered = None  # remember last hovered line to reduce flicker
         self.combo = QtWidgets.QComboBox(); self.combo.setEditable(False)
         fm = self.combo.fontMetrics(); self.combo.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToContents)
         self.combo.setMinimumContentsLength(combo_width_chars)
@@ -276,85 +273,6 @@ class PlotCell(QtWidgets.QWidget):
             if axis is ax.xaxis: ax.set_xlim(left, right)
             else: ax.set_ylim(left, right)
         self.canvas.draw_idle()
-
-    def _format_tooltip(self, meta: Dict[str, Any]) -> str:
-        """Build a compact tooltip from a line's metadata."""
-        fn = meta.get("filename", "?")
-        trial = meta.get("trial_type", "?")
-        side = meta.get("side", "?")
-        cyc = meta.get("cycle_no", "?")
-        param = meta.get("param", "")
-        coord = meta.get("coord", "")
-        # --- insert below line above ---
-        time_info = meta.get("time", "")
-        first_line = str(fn)
-        bits = [str(trial), str(side), f"{cyc}"]
-        if param:
-            bits.append(str(param))
-        if coord:
-            bits.append(str(coord))
-        if time_info:
-            bits.append(str(time_info))
-        return first_line + "\n" + " • ".join(bits)
-
-    def _on_motion(self, event) -> None:
-        """Hover handler: show a tooltip when the cursor is close to a line."""
-        # Only for our axes
-        if event.inaxes is not self.ax:
-            self._hide_tooltip()
-            return
-        # Find first visible line under the cursor
-        hit = None
-        for ln in self.ax.lines:
-            if not ln.get_visible():
-                continue
-            try:
-                contains, _ = ln.contains(event)
-            except Exception:
-                contains = False
-            if contains:
-                hit = ln
-                break
-        if hit is None:
-            self._hide_tooltip()
-            return
-        if self._last_hovered is hit:
-            return  # unchanged
-        self._last_hovered = hit
-        meta = getattr(hit, "_meta", {}) or {}
-        tip = self._format_tooltip(meta)
-        QtWidgets.QToolTip.showText(QtGui.QCursor.pos(), tip)
-
-    def _hide_tooltip(self) -> None:
-        if self._last_hovered is not None:
-            self._last_hovered = None
-            QtWidgets.QToolTip.hideText()
-    def _time_meta_from_cycle(self, cdict: Dict[str, Any], group_hint: Optional[str], npts: int) -> str:
-        """
-        Build a compact time/index string for tooltips.
-        - If a 'time' vector exists under the hinted group (analog/point), use its min/max (s).
-        - Otherwise, fall back to indices only.
-        """
-        try:
-            if group_hint == "analog":
-                tvec = np.asarray(cdict.get("analog", {}).get("time", []))
-                fvec = np.asarray(cdict.get("analog", {}).get("frames", []))
-                idx0, idx1 = int(np.nanmin(fvec)), int(np.nanmax(fvec))
-            elif group_hint == "point":
-                # Some datasets store point time too; if missing we’ll fall back gracefully.
-                tvec = np.asarray(cdict.get("point", {}).get("time", []))
-                fvec = np.asarray(cdict.get("point", {}).get("frames", []))
-                idx0, idx1 = int(np.nanmin(fvec)), int(np.nanmax(fvec))
-        except Exception:
-            tvec = None
-            idx0 = 0
-            idx1 = max(0, int(npts) - 1)
-
-        if isinstance(tvec, np.ndarray) and tvec.size > 0 and np.isfinite(tvec).any():
-            t0 = float(np.nanmin(tvec))
-            t1 = float(np.nanmax(tvec))
-            return f"{t0:.3f} s (idx {idx0})—{t1:.3f} s (idx {idx1})"
-        return f"idx {idx0}—{idx1}"
     def set_options(self, displays: Sequence[str], default_display: Optional[str] = None) -> None:
         prev = self.combo.currentText().strip()
         self.combo.blockSignals(True); self.combo.clear(); self.combo.addItems(list(displays))
@@ -413,55 +331,20 @@ class PlotCell(QtWidgets.QWidget):
                             if a101 is None: continue
                             xs = np.linspace(0.0,100.0,a101.shape[0])
                             ln, = self.ax.plot(xs, a101, lw=1.0, alpha=1.0); style_line(ln, stride_side, cdict)
-                            ln._meta = getattr(ln, "_meta", {}) or {}
-                            ln._meta.update({
-                                "filename": Path(lf.meta.path).name,
-                                "trial_type": lf.meta.original_trial_type,
-                                "side": stride_side,
-                                "cycle_no": cyc_name,
-                                "param": nm,
-                                "coord": "",
-                                "time": self._time_meta_from_cycle(cdict, group_hint="analog", npts=a101.shape[0]),
-                            })
-                            ln.set_pickradius(self._hover_pick_tol)
                             line_map[ln] = SelectionItem(cycle_ref=(fi, stride_side, cyc_name), param=nm)
                     elif kind=="3d":
                         a101 = _timenorm(arr, is_3d=True); 
                         if a101 is None: continue
                         xs = np.linspace(0.0,100.0,a101.shape[0])
                         coords = range(3) if self.coord_index is None else [self.coord_index]
-                        time_meta = self._time_meta_from_cycle(cdict, group_hint="point", npts=a101.shape[0])
                         for j in coords:
                             yy = a101[:,j]; ln, = self.ax.plot(xs, yy, lw=1.2, alpha=1.0); style_line(ln, stride_side, cdict)
-                            coord_label = ("x", "y", "z")[j]
-                            ln._meta = getattr(ln, "_meta", {}) or {}
-                            ln._meta.update({
-                                "filename": Path(lf.meta.path).name,
-                                "trial_type": lf.meta.original_trial_type,
-                                "side": stride_side,
-                                "cycle_no": cyc_name,
-                                "param": actual_key,                        # base key (e.g., "LHipAngles")
-                                "coord": coord_label,                       # "x"/"y"/"z"
-                                "time": time_meta,
-                            })
-                            ln.set_pickradius(self._hover_pick_tol)
                             line_map[ln] = SelectionItem(cycle_ref=(fi, stride_side, cyc_name), param=f"{actual_key}[{j}]")
                     else:
                         a101 = _timenorm(arr, is_3d=False); 
                         if a101 is None: continue
                         xs = np.linspace(0.0,100.0,a101.shape[0]); ln, = self.ax.plot(xs, a101, lw=1.2, alpha=1.0)
                         style_line(ln, stride_side, cdict)
-                        ln._meta = getattr(ln, "_meta", {}) or {}
-                        ln._meta.update({
-                            "filename": Path(lf.meta.path).name,
-                            "trial_type": lf.meta.original_trial_type,
-                            "side": stride_side,
-                            "cycle_no": cyc_name,
-                            "param": actual_key,                        # the selected signal key
-                            "coord": "",                                # 1-D signal
-                            "time": self._time_meta_from_cycle(cdict, group_hint="point", npts=a101.shape[0]),
-                        })
-                        ln.set_pickradius(self._hover_pick_tol)
                         line_map[ln] = SelectionItem(cycle_ref=(fi, stride_side, cyc_name), param=actual_key)
         self.ax.set_ylabel(display_key); self.ax.set_xlabel("% cycle"); self.canvas.draw_idle()
         self.selector = SelectionManager(self.ax, line_map, mode=("deselect" if current_mode=="deselect" else "select"), on_result=self._on_rect); self.selector.set_active(True)
@@ -589,14 +472,6 @@ class MainWindow(QtWidgets.QMainWindow):
         for page in (self.page1,self.page2):
             for cell in page.cells:
                 if cell.selector: cell.selector.set_mode(self.current_mode)
-        fm = self.loaded[0].meta if self.loaded else None
-        if fm:
-            fname = Path(fm.path).name
-            self.status_widget.showMessage(
-                f"Mode: {self.current_mode.upper()} — {fname} • {fm.original_trial_type}", 1500
-            )
-        else:
-            self.status_widget.showMessage(f"Mode: {self.current_mode.upper()}", 1500)
         self.autoscale_all()
     @Slot()
     def on_choose_root(self):
