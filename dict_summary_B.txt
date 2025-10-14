@@ -1,0 +1,1060 @@
+root: dict (keys=7)
+├── __header__: <bytes> len=70
+├── __version__: <str> len=3
+├── __globals__: list (len=0)
+├── left_stride: dict (keys=3)
+│   ├── cycle1: dict (keys=6)
+│   │   ├── point: dict (keys=28)
+│   │   │   ├── time: <np.ndarray[float64]> shape=(180), n=180
+│   │   │   ├── frames: <np.ndarray[int32]> shape=(180), n=180
+│   │   │   ├── RNeckAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LNeckAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LShoulderAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LElbowAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LWristAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── RShoulderAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── RElbowAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── RWristAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── RThoraxAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LThoraxAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── RHeadAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LHeadAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LPelvisAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── RPelvisAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LHipAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── RHipAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LKneeAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── RKneeAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LAnkleAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── RAnkleAngles: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LKneeMoment: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── RKneeMoment: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LAnkleMoment: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── RAnkleMoment: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   ├── LHipMoment: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   │   └── RHipMoment: <np.ndarray[float64]> shape=(180x3), n=540
+│   │   ├── analog: dict (keys=55)
+│   │   │   ├── time: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── frames: <np.ndarray[int32]> shape=(897), n=897
+│   │   │   ├── Force_Fx1: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fy1: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fz1: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fx2: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fy2: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fz2: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fx3: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fy3: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fz3: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fx4: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fy4: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fz4: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fx5: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fy5: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fz5: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fx6: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fy6: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fz6: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fx7: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fy7: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fz7: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fx8: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fy8: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fz8: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fx9: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fy9: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── Force_Fz9: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_01_R_M_tibialis_anterior: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_02_R_M_peroneus_long: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_03_R_M_gastro_lat: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_04_R_M_gastroc_med: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_05_R_M_soleus: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_06_R_M_rectus_fem: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_07_R_M_gluteus_maximus: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_08_R_M_gluteus_medius: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_09_R_M_vastus_lat: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_10_R_M_vastus_med: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_11_R_M_semitendinosus: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_12_R_M_biceps_femoris: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_13_R_M_erector_spine: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_17_L_M_tibialis_anterior: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_18_L_M_peroneus_long: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_19_L_M_gastro_lat: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_20_L_M_gastroc_med: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_21_L_M_vastus_lat: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_22_L_M_vastus_med: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_23_L_M_semitendinosus: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_24_L_M_biceps_femoris: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_25_L_M_soleus: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_26_L_M_rectus_fem: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_27_L_M_erector_spine: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   ├── EMG_31_L_M_gluteus_maximus: <np.ndarray[float64]> shape=(897), n=897
+│   │   │   └── EMG_32_L_M_gluteus_medius: <np.ndarray[float64]> shape=(897), n=897
+│   │   ├── Left_Foot_Off: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <int> scalar
+│   │   │   └── percent: <float> scalar
+│   │   ├── Right_Foot_Off: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <float> scalar
+│   │   │   └── percent: <float> scalar
+│   │   ├── Right_Foot_Strike: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <float> scalar
+│   │   │   └── percent: <float> scalar
+│   │   └── kinetic: <int> scalar
+│   ├── cycle2: dict (keys=6)
+│   │   ├── point: dict (keys=28)
+│   │   │   ├── time: <np.ndarray[float64]> shape=(186), n=186
+│   │   │   ├── frames: <np.ndarray[int32]> shape=(186), n=186
+│   │   │   ├── RNeckAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LNeckAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LShoulderAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LElbowAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LWristAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── RShoulderAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── RElbowAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── RWristAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── RThoraxAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LThoraxAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── RHeadAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LHeadAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LPelvisAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── RPelvisAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LHipAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── RHipAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LKneeAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── RKneeAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LAnkleAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── RAnkleAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LKneeMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── RKneeMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LAnkleMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── RAnkleMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   ├── LHipMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   │   └── RHipMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│   │   ├── analog: dict (keys=55)
+│   │   │   ├── time: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── frames: <np.ndarray[int32]> shape=(929), n=929
+│   │   │   ├── Force_Fx1: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fy1: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fz1: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fx2: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fy2: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fz2: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fx3: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fy3: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fz3: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fx4: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fy4: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fz4: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fx5: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fy5: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fz5: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fx6: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fy6: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fz6: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fx7: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fy7: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fz7: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fx8: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fy8: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fz8: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fx9: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fy9: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── Force_Fz9: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_01_R_M_tibialis_anterior: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_02_R_M_peroneus_long: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_03_R_M_gastro_lat: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_04_R_M_gastroc_med: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_05_R_M_soleus: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_06_R_M_rectus_fem: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_07_R_M_gluteus_maximus: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_08_R_M_gluteus_medius: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_09_R_M_vastus_lat: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_10_R_M_vastus_med: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_11_R_M_semitendinosus: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_12_R_M_biceps_femoris: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_13_R_M_erector_spine: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_17_L_M_tibialis_anterior: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_18_L_M_peroneus_long: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_19_L_M_gastro_lat: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_20_L_M_gastroc_med: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_21_L_M_vastus_lat: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_22_L_M_vastus_med: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_23_L_M_semitendinosus: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_24_L_M_biceps_femoris: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_25_L_M_soleus: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_26_L_M_rectus_fem: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_27_L_M_erector_spine: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   ├── EMG_31_L_M_gluteus_maximus: <np.ndarray[float64]> shape=(929), n=929
+│   │   │   └── EMG_32_L_M_gluteus_medius: <np.ndarray[float64]> shape=(929), n=929
+│   │   ├── Left_Foot_Off: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <int> scalar
+│   │   │   └── percent: <float> scalar
+│   │   ├── Right_Foot_Off: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <float> scalar
+│   │   │   └── percent: <float> scalar
+│   │   ├── Right_Foot_Strike: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <float> scalar
+│   │   │   └── percent: <float> scalar
+│   │   └── kinetic: <int> scalar
+│   └── cycle3: dict (keys=6)
+│       ├── point: dict (keys=28)
+│       │   ├── time: <np.ndarray[float64]> shape=(186), n=186
+│       │   ├── frames: <np.ndarray[int32]> shape=(186), n=186
+│       │   ├── RNeckAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LNeckAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LShoulderAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LElbowAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LWristAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── RShoulderAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── RElbowAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── RWristAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── RThoraxAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LThoraxAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── RHeadAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LHeadAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LPelvisAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── RPelvisAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LHipAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── RHipAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LKneeAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── RKneeAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LAnkleAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── RAnkleAngles: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LKneeMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── RKneeMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LAnkleMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── RAnkleMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   ├── LHipMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│       │   └── RHipMoment: <np.ndarray[float64]> shape=(186x3), n=558
+│       ├── analog: dict (keys=55)
+│       │   ├── time: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── frames: <np.ndarray[int32]> shape=(930), n=930
+│       │   ├── Force_Fx1: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fy1: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fz1: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fx2: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fy2: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fz2: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fx3: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fy3: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fz3: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fx4: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fy4: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fz4: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fx5: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fy5: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fz5: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fx6: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fy6: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fz6: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fx7: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fy7: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fz7: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fx8: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fy8: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fz8: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fx9: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fy9: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── Force_Fz9: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_01_R_M_tibialis_anterior: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_02_R_M_peroneus_long: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_03_R_M_gastro_lat: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_04_R_M_gastroc_med: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_05_R_M_soleus: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_06_R_M_rectus_fem: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_07_R_M_gluteus_maximus: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_08_R_M_gluteus_medius: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_09_R_M_vastus_lat: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_10_R_M_vastus_med: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_11_R_M_semitendinosus: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_12_R_M_biceps_femoris: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_13_R_M_erector_spine: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_17_L_M_tibialis_anterior: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_18_L_M_peroneus_long: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_19_L_M_gastro_lat: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_20_L_M_gastroc_med: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_21_L_M_vastus_lat: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_22_L_M_vastus_med: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_23_L_M_semitendinosus: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_24_L_M_biceps_femoris: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_25_L_M_soleus: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_26_L_M_rectus_fem: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_27_L_M_erector_spine: <np.ndarray[float64]> shape=(930), n=930
+│       │   ├── EMG_31_L_M_gluteus_maximus: <np.ndarray[float64]> shape=(930), n=930
+│       │   └── EMG_32_L_M_gluteus_medius: <np.ndarray[float64]> shape=(930), n=930
+│       ├── Left_Foot_Off: dict (keys=3)
+│       │   ├── time: <float> scalar
+│       │   ├── frame: <int> scalar
+│       │   └── percent: <float> scalar
+│       ├── Right_Foot_Off: dict (keys=3)
+│       │   ├── time: <float> scalar
+│       │   ├── frame: <float> scalar
+│       │   └── percent: <float> scalar
+│       ├── Right_Foot_Strike: dict (keys=3)
+│       │   ├── time: <float> scalar
+│       │   ├── frame: <float> scalar
+│       │   └── percent: <float> scalar
+│       └── kinetic: <int> scalar
+├── right_stride: dict (keys=3)
+│   ├── cycle1: dict (keys=6)
+│   │   ├── point: dict (keys=28)
+│   │   │   ├── time: <np.ndarray[float64]> shape=(185), n=185
+│   │   │   ├── frames: <np.ndarray[int32]> shape=(185), n=185
+│   │   │   ├── RNeckAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LNeckAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LShoulderAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LElbowAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LWristAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── RShoulderAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── RElbowAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── RWristAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── RThoraxAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LThoraxAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── RHeadAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LHeadAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LPelvisAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── RPelvisAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LHipAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── RHipAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LKneeAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── RKneeAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LAnkleAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── RAnkleAngles: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LKneeMoment: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── RKneeMoment: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LAnkleMoment: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── RAnkleMoment: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   ├── LHipMoment: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   │   └── RHipMoment: <np.ndarray[float64]> shape=(185x3), n=555
+│   │   ├── analog: dict (keys=55)
+│   │   │   ├── time: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── frames: <np.ndarray[int32]> shape=(923), n=923
+│   │   │   ├── Force_Fx1: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fy1: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fz1: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fx2: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fy2: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fz2: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fx3: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fy3: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fz3: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fx4: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fy4: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fz4: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fx5: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fy5: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fz5: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fx6: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fy6: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fz6: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fx7: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fy7: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fz7: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fx8: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fy8: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fz8: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fx9: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fy9: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── Force_Fz9: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_01_R_M_tibialis_anterior: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_02_R_M_peroneus_long: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_03_R_M_gastro_lat: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_04_R_M_gastroc_med: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_05_R_M_soleus: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_06_R_M_rectus_fem: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_07_R_M_gluteus_maximus: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_08_R_M_gluteus_medius: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_09_R_M_vastus_lat: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_10_R_M_vastus_med: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_11_R_M_semitendinosus: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_12_R_M_biceps_femoris: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_13_R_M_erector_spine: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_17_L_M_tibialis_anterior: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_18_L_M_peroneus_long: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_19_L_M_gastro_lat: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_20_L_M_gastroc_med: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_21_L_M_vastus_lat: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_22_L_M_vastus_med: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_23_L_M_semitendinosus: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_24_L_M_biceps_femoris: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_25_L_M_soleus: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_26_L_M_rectus_fem: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_27_L_M_erector_spine: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   ├── EMG_31_L_M_gluteus_maximus: <np.ndarray[float64]> shape=(923), n=923
+│   │   │   └── EMG_32_L_M_gluteus_medius: <np.ndarray[float64]> shape=(923), n=923
+│   │   ├── Right_Foot_Off: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <int> scalar
+│   │   │   └── percent: <float> scalar
+│   │   ├── Left_Foot_Off: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <float> scalar
+│   │   │   └── percent: <float> scalar
+│   │   ├── Left_Foot_Strike: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <float> scalar
+│   │   │   └── percent: <float> scalar
+│   │   └── kinetic: <int> scalar
+│   ├── cycle2: dict (keys=6)
+│   │   ├── point: dict (keys=28)
+│   │   │   ├── time: <np.ndarray[float64]> shape=(187), n=187
+│   │   │   ├── frames: <np.ndarray[int32]> shape=(187), n=187
+│   │   │   ├── RNeckAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LNeckAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LShoulderAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LElbowAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LWristAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── RShoulderAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── RElbowAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── RWristAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── RThoraxAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LThoraxAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── RHeadAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LHeadAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LPelvisAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── RPelvisAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LHipAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── RHipAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LKneeAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── RKneeAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LAnkleAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── RAnkleAngles: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LKneeMoment: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── RKneeMoment: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LAnkleMoment: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── RAnkleMoment: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   ├── LHipMoment: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   │   └── RHipMoment: <np.ndarray[float64]> shape=(187x3), n=561
+│   │   ├── analog: dict (keys=55)
+│   │   │   ├── time: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── frames: <np.ndarray[int32]> shape=(933), n=933
+│   │   │   ├── Force_Fx1: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fy1: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fz1: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fx2: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fy2: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fz2: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fx3: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fy3: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fz3: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fx4: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fy4: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fz4: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fx5: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fy5: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fz5: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fx6: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fy6: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fz6: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fx7: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fy7: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fz7: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fx8: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fy8: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fz8: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fx9: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fy9: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── Force_Fz9: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_01_R_M_tibialis_anterior: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_02_R_M_peroneus_long: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_03_R_M_gastro_lat: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_04_R_M_gastroc_med: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_05_R_M_soleus: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_06_R_M_rectus_fem: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_07_R_M_gluteus_maximus: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_08_R_M_gluteus_medius: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_09_R_M_vastus_lat: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_10_R_M_vastus_med: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_11_R_M_semitendinosus: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_12_R_M_biceps_femoris: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_13_R_M_erector_spine: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_17_L_M_tibialis_anterior: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_18_L_M_peroneus_long: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_19_L_M_gastro_lat: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_20_L_M_gastroc_med: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_21_L_M_vastus_lat: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_22_L_M_vastus_med: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_23_L_M_semitendinosus: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_24_L_M_biceps_femoris: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_25_L_M_soleus: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_26_L_M_rectus_fem: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_27_L_M_erector_spine: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   ├── EMG_31_L_M_gluteus_maximus: <np.ndarray[float64]> shape=(933), n=933
+│   │   │   └── EMG_32_L_M_gluteus_medius: <np.ndarray[float64]> shape=(933), n=933
+│   │   ├── Right_Foot_Off: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <int> scalar
+│   │   │   └── percent: <float> scalar
+│   │   ├── Left_Foot_Off: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <float> scalar
+│   │   │   └── percent: <float> scalar
+│   │   ├── Left_Foot_Strike: dict (keys=3)
+│   │   │   ├── time: <float> scalar
+│   │   │   ├── frame: <float> scalar
+│   │   │   └── percent: <float> scalar
+│   │   └── kinetic: <int> scalar
+│   └── cycle3: dict (keys=6)
+│       ├── point: dict (keys=28)
+│       │   ├── time: <np.ndarray[float64]> shape=(184), n=184
+│       │   ├── frames: <np.ndarray[int32]> shape=(184), n=184
+│       │   ├── RNeckAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LNeckAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LShoulderAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LElbowAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LWristAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── RShoulderAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── RElbowAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── RWristAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── RThoraxAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LThoraxAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── RHeadAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LHeadAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LPelvisAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── RPelvisAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LHipAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── RHipAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LKneeAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── RKneeAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LAnkleAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── RAnkleAngles: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LKneeMoment: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── RKneeMoment: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LAnkleMoment: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── RAnkleMoment: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   ├── LHipMoment: <np.ndarray[float64]> shape=(184x3), n=552
+│       │   └── RHipMoment: <np.ndarray[float64]> shape=(184x3), n=552
+│       ├── analog: dict (keys=55)
+│       │   ├── time: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── frames: <np.ndarray[int32]> shape=(924), n=924
+│       │   ├── Force_Fx1: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fy1: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fz1: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fx2: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fy2: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fz2: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fx3: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fy3: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fz3: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fx4: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fy4: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fz4: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fx5: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fy5: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fz5: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fx6: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fy6: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fz6: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fx7: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fy7: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fz7: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fx8: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fy8: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fz8: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fx9: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fy9: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── Force_Fz9: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_01_R_M_tibialis_anterior: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_02_R_M_peroneus_long: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_03_R_M_gastro_lat: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_04_R_M_gastroc_med: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_05_R_M_soleus: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_06_R_M_rectus_fem: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_07_R_M_gluteus_maximus: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_08_R_M_gluteus_medius: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_09_R_M_vastus_lat: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_10_R_M_vastus_med: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_11_R_M_semitendinosus: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_12_R_M_biceps_femoris: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_13_R_M_erector_spine: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_17_L_M_tibialis_anterior: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_18_L_M_peroneus_long: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_19_L_M_gastro_lat: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_20_L_M_gastroc_med: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_21_L_M_vastus_lat: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_22_L_M_vastus_med: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_23_L_M_semitendinosus: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_24_L_M_biceps_femoris: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_25_L_M_soleus: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_26_L_M_rectus_fem: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_27_L_M_erector_spine: <np.ndarray[float64]> shape=(924), n=924
+│       │   ├── EMG_31_L_M_gluteus_maximus: <np.ndarray[float64]> shape=(924), n=924
+│       │   └── EMG_32_L_M_gluteus_medius: <np.ndarray[float64]> shape=(924), n=924
+│       ├── Right_Foot_Off: dict (keys=3)
+│       │   ├── time: <float> scalar
+│       │   ├── frame: <int> scalar
+│       │   └── percent: <float> scalar
+│       ├── Left_Foot_Off: dict (keys=3)
+│       │   ├── time: <float> scalar
+│       │   ├── frame: <float> scalar
+│       │   └── percent: <float> scalar
+│       ├── Left_Foot_Strike: dict (keys=3)
+│       │   ├── time: <float> scalar
+│       │   ├── frame: <float> scalar
+│       │   └── percent: <float> scalar
+│       └── kinetic: <int> scalar
+├── meta: dict (keys=4)
+│   ├── FORCE_PLATFORM: dict (keys=8)
+│   │   ├── USED: dict (keys=4)
+│   │   │   ├── type: <int> scalar
+│   │   │   ├── description: <str> len=0
+│   │   │   ├── is_locked: <int> scalar
+│   │   │   └── value: <int> scalar
+│   │   ├── ZERO: dict (keys=4)
+│   │   │   ├── type: <int> scalar
+│   │   │   ├── description: <str> len=0
+│   │   │   ├── is_locked: <int> scalar
+│   │   │   └── value: <np.ndarray[int32]> shape=(2), n=2
+│   │   ├── TYPE: dict (keys=4)
+│   │   │   ├── type: <int> scalar
+│   │   │   ├── description: <str> len=0
+│   │   │   ├── is_locked: <int> scalar
+│   │   │   └── value: <np.ndarray[int32]> shape=(9), n=9
+│   │   ├── CORNERS: dict (keys=4)
+│   │   │   ├── type: <int> scalar
+│   │   │   ├── description: <str> len=0
+│   │   │   ├── is_locked: <int> scalar
+│   │   │   └── value: <np.ndarray[float64]> shape=(3x4x9), n=108
+│   │   ├── ORIGIN: dict (keys=4)
+│   │   │   ├── type: <int> scalar
+│   │   │   ├── description: <str> len=0
+│   │   │   ├── is_locked: <int> scalar
+│   │   │   └── value: <np.ndarray[float64]> shape=(3x9), n=27
+│   │   ├── CHANNEL: dict (keys=4)
+│   │   │   ├── type: <int> scalar
+│   │   │   ├── description: <str> len=0
+│   │   │   ├── is_locked: <int> scalar
+│   │   │   └── value: <np.ndarray[int32]> shape=(6x9), n=54
+│   │   ├── CAL_MATRIX: dict (keys=4)
+│   │   │   ├── type: <int> scalar
+│   │   │   ├── description: <str> len=0
+│   │   │   ├── is_locked: <int> scalar
+│   │   │   └── value: <np.ndarray[float64]> shape=(0), n=0
+│   │   └── VALID: dict (keys=9)
+│   │       ├── FP9: <str> len=4
+│   │       ├── FP7: <str> len=5
+│   │       ├── FP1: <str> len=7
+│   │       ├── FP2: <str> len=7
+│   │       ├── FP3: <str> len=7
+│   │       ├── FP4: <str> len=7
+│   │       ├── FP5: <str> len=7
+│   │       ├── FP6: <str> len=7
+│   │       └── FP8: <str> len=7
+│   ├── PROCESSING: dict (keys=114)
+│   │   ├── Bodymass: <float> scalar
+│   │   ├── Height: <float> scalar
+│   │   ├── LegFlag: <float> scalar
+│   │   ├── StaticFootFlat: <float> scalar
+│   │   ├── StaticHeadLevel: <float> scalar
+│   │   ├── InterAsisDistance: <float> scalar
+│   │   ├── LShoulderOffset: <float> scalar
+│   │   ├── LElbowWidth: <float> scalar
+│   │   ├── LWristWidth: <float> scalar
+│   │   ├── LHandThickness: <float> scalar
+│   │   ├── RShoulderOffset: <float> scalar
+│   │   ├── RElbowWidth: <float> scalar
+│   │   ├── RWristWidth: <float> scalar
+│   │   ├── RHandThickness: <float> scalar
+│   │   ├── MarkerDiameter: <float> scalar
+│   │   ├── LLegLength: <float> scalar
+│   │   ├── RLegLength: <float> scalar
+│   │   ├── LKneeWidth: <float> scalar
+│   │   ├── RKneeWidth: <float> scalar
+│   │   ├── LAnkleWidth: <float> scalar
+│   │   ├── RAnkleWidth: <float> scalar
+│   │   ├── LTibialTorsion: <float> scalar
+│   │   ├── RTibialTorsion: <float> scalar
+│   │   ├── IADCirkel: <float> scalar
+│   │   ├── LegLength: <float> scalar
+│   │   ├── LStaticFootFlat: <float> scalar
+│   │   ├── RStaticFootFlat: <float> scalar
+│   │   ├── %LAJCX: <float> scalar
+│   │   ├── %LAJCY: <float> scalar
+│   │   ├── %LAJCZ: <float> scalar
+│   │   ├── %LANKX: <float> scalar
+│   │   ├── %LANKY: <float> scalar
+│   │   ├── %LANKZ: <float> scalar
+│   │   ├── %RAJCX: <float> scalar
+│   │   ├── %RAJCY: <float> scalar
+│   │   ├── %RAJCZ: <float> scalar
+│   │   ├── %RANKX: <float> scalar
+│   │   ├── %RANKY: <float> scalar
+│   │   ├── %RANKZ: <float> scalar
+│   │   ├── LFootLength: <float> scalar
+│   │   ├── LStaticPlantFlex: <float> scalar
+│   │   ├── LStaticRotOff: <float> scalar
+│   │   ├── LStatPlanFlex: <float> scalar
+│   │   ├── RFootLength: <float> scalar
+│   │   ├── RStaticPlantFlex: <float> scalar
+│   │   ├── RStaticRotOff: <float> scalar
+│   │   ├── RStatPlanFlex: <float> scalar
+│   │   ├── %LHJCX: <float> scalar
+│   │   ├── %LHJCY: <float> scalar
+│   │   ├── %LHJCZ: <float> scalar
+│   │   ├── %LKJCX: <float> scalar
+│   │   ├── %LKJCY: <float> scalar
+│   │   ├── %LKJCZ: <float> scalar
+│   │   ├── %LKNEX: <float> scalar
+│   │   ├── %LKNEY: <float> scalar
+│   │   ├── %LKNEZ: <float> scalar
+│   │   ├── %RHJCX: <float> scalar
+│   │   ├── %RHJCY: <float> scalar
+│   │   ├── %RHJCZ: <float> scalar
+│   │   ├── %RKJCX: <float> scalar
+│   │   ├── %RKJCY: <float> scalar
+│   │   ├── %RKJCZ: <float> scalar
+│   │   ├── %RKNEX: <float> scalar
+│   │   ├── %RKNEY: <float> scalar
+│   │   ├── %RKNEZ: <float> scalar
+│   │   ├── LAsisTrocanterDistance: <float> scalar
+│   │   ├── PD: <float> scalar
+│   │   ├── PelvisSize: <float> scalar
+│   │   ├── RAsisTrocanterDistance: <float> scalar
+│   │   ├── FP1AveCOPX: <float> scalar
+│   │   ├── FP1AveCOPY: <float> scalar
+│   │   ├── FP1AveCOPZ: <float> scalar
+│   │   ├── FP1StDevCOPX: <float> scalar
+│   │   ├── FP1StDevCOPY: <float> scalar
+│   │   ├── FP2AveCOPX: <float> scalar
+│   │   ├── FP2AveCOPY: <float> scalar
+│   │   ├── FP2AveCOPZ: <float> scalar
+│   │   ├── FP2StDevCOPX: <float> scalar
+│   │   ├── FP2StDevCOPY: <float> scalar
+│   │   ├── FP3AveCOPX: <float> scalar
+│   │   ├── FP3AveCOPY: <float> scalar
+│   │   ├── FP3AveCOPZ: <float> scalar
+│   │   ├── FP3StDevCOPX: <float> scalar
+│   │   ├── FP3StDevCOPY: <float> scalar
+│   │   ├── FP4AveCOPX: <float> scalar
+│   │   ├── FP4AveCOPY: <float> scalar
+│   │   ├── FP4AveCOPZ: <float> scalar
+│   │   ├── FP4StDevCOPX: <float> scalar
+│   │   ├── FP4StDevCOPY: <float> scalar
+│   │   ├── FP5AveCOPX: <float> scalar
+│   │   ├── FP5AveCOPY: <float> scalar
+│   │   ├── FP5AveCOPZ: <float> scalar
+│   │   ├── FP5StDevCOPX: <float> scalar
+│   │   ├── FP5StDevCOPY: <float> scalar
+│   │   ├── FP6AveCOPX: <float> scalar
+│   │   ├── FP6AveCOPY: <float> scalar
+│   │   ├── FP6AveCOPZ: <float> scalar
+│   │   ├── FP6StDevCOPX: <float> scalar
+│   │   ├── FP6StDevCOPY: <float> scalar
+│   │   ├── FP7AveCOPX: <float> scalar
+│   │   ├── FP7AveCOPY: <float> scalar
+│   │   ├── FP7AveCOPZ: <float> scalar
+│   │   ├── FP7StDevCOPX: <float> scalar
+│   │   ├── FP7StDevCOPY: <float> scalar
+│   │   ├── FP8AveCOPX: <float> scalar
+│   │   ├── FP8AveCOPY: <float> scalar
+│   │   ├── FP8AveCOPZ: <float> scalar
+│   │   ├── FP8StDevCOPX: <float> scalar
+│   │   ├── FP8StDevCOPY: <float> scalar
+│   │   ├── FP9AveCOPX: <float> scalar
+│   │   ├── FP9AveCOPY: <float> scalar
+│   │   ├── FP9AveCOPZ: <float> scalar
+│   │   ├── FP9StDevCOPX: <float> scalar
+│   │   └── FP9StDevCOPY: <float> scalar
+│   ├── mp_info: dict (keys=273)
+│   │   ├── LeftShoulderOffset: <str> len=2
+│   │   ├── RightShoulderOffset: <str> len=2
+│   │   ├── LeftElbowWidth: <str> len=2
+│   │   ├── RightElbowWidth: <str> len=2
+│   │   ├── LeftHandThickness: <str> len=2
+│   │   ├── RightHandThickness: <str> len=2
+│   │   ├── LeftLegLength: <str> len=1
+│   │   ├── RightLegLength: <str> len=1
+│   │   ├── LeftKneeWidth: <str> len=1
+│   │   ├── RightKneeWidth: <str> len=1
+│   │   ├── LeftAnkleWidth: <str> len=1
+│   │   ├── RightAnkleWidth: <str> len=1
+│   │   ├── LeftTibialTorsion: <str> len=1
+│   │   ├── RightTibialTorsion: <str> len=1
+│   │   ├── LThighRotation: <str> len=1
+│   │   ├── RThighRotation: <str> len=1
+│   │   ├── LShankRotation: <str> len=1
+│   │   ├── RShankRotation: <str> len=1
+│   │   ├── LAnkleAbAdd: <str> len=1
+│   │   ├── RAnkleAbAdd: <str> len=1
+│   │   ├── HeadOffset: <str> len=1
+│   │   ├── Pelvis_Thorax_x: <str> len=7
+│   │   ├── Pelvis_Thorax_y: <str> len=7
+│   │   ├── Pelvis_Thorax_z: <str> len=8
+│   │   ├── Pelvis_Pelvis1_x: <str> len=8
+│   │   ├── Pelvis_Pelvis1_y: <str> len=7
+│   │   ├── Pelvis_Pelvis1_z: <str> len=7
+│   │   ├── Pelvis_Pelvis2_x: <str> len=1
+│   │   ├── Pelvis_Pelvis2_y: <str> len=1
+│   │   ├── Pelvis_Pelvis2_z: <str> len=1
+│   │   ├── Pelvis_Pelvis3_x: <str> len=1
+│   │   ├── Pelvis_Pelvis3_y: <str> len=1
+│   │   ├── Pelvis_Pelvis3_z: <str> len=1
+│   │   ├── Thorax_Head_x: <str> len=7
+│   │   ├── Thorax_Head_y: <str> len=7
+│   │   ├── Thorax_Head_z: <str> len=8
+│   │   ├── Thorax_Thorax1_x: <str> len=8
+│   │   ├── Thorax_Thorax1_y: <str> len=8
+│   │   ├── Thorax_Thorax1_z: <str> len=7
+│   │   ├── Thorax_Thorax2_x: <str> len=6
+│   │   ├── Thorax_Thorax2_y: <str> len=8
+│   │   ├── Thorax_Thorax2_z: <str> len=8
+│   │   ├── Thorax_Thorax3_x: <str> len=8
+│   │   ├── Thorax_Thorax3_y: <str> len=7
+│   │   ├── Thorax_Thorax3_z: <str> len=8
+│   │   ├── Thorax_Thorax4_x: <str> len=7
+│   │   ├── Thorax_Thorax4_y: <str> len=7
+│   │   ├── Thorax_Thorax4_z: <str> len=8
+│   │   ├── Thorax_Thorax5_x: <str> len=7
+│   │   ├── Thorax_Thorax5_y: <str> len=8
+│   │   ├── Thorax_Thorax5_z: <str> len=8
+│   │   ├── Head_Head1_x: <str> len=7
+│   │   ├── Head_Head1_y: <str> len=7
+│   │   ├── Head_Head1_z: <str> len=8
+│   │   ├── Head_Head2_x: <str> len=7
+│   │   ├── Head_Head2_y: <str> len=7
+│   │   ├── Head_Head2_z: <str> len=8
+│   │   ├── Head_Head3_x: <str> len=8
+│   │   ├── Head_Head3_y: <str> len=7
+│   │   ├── Head_Head3_z: <str> len=8
+│   │   ├── Head_Head4_x: <str> len=7
+│   │   ├── Head_Head4_y: <str> len=7
+│   │   ├── Head_Head4_z: <str> len=8
+│   │   ├── LShoulder_LeftUpperArm_x: <str> len=7
+│   │   ├── LShoulder_LeftUpperArm_y: <str> len=8
+│   │   ├── LShoulder_LeftUpperArm_z: <str> len=5
+│   │   ├── LUpperArm_LeftLowerArm_x: <str> len=7
+│   │   ├── LUpperArm_LeftLowerArm_y: <str> len=7
+│   │   ├── LUpperArm_LeftLowerArm_z: <str> len=8
+│   │   ├── LUpperArm_LeftUpperArm2_x: <str> len=8
+│   │   ├── LUpperArm_LeftUpperArm2_y: <str> len=7
+│   │   ├── LUpperArm_LeftUpperArm2_z: <str> len=8
+│   │   ├── LUpperArm_LeftUpperArm3_x: <str> len=7
+│   │   ├── LUpperArm_LeftUpperArm3_y: <str> len=7
+│   │   ├── LUpperArm_LeftUpperArm3_z: <str> len=8
+│   │   ├── LLowerArm_LeftHand_x: <str> len=8
+│   │   ├── LLowerArm_LeftHand_y: <str> len=7
+│   │   ├── LLowerArm_LeftHand_z: <str> len=8
+│   │   ├── LLowerArm_LeftLowerArm2_x: <str> len=6
+│   │   ├── LLowerArm_LeftLowerArm2_y: <str> len=7
+│   │   ├── LLowerArm_LeftLowerArm2_z: <str> len=8
+│   │   ├── LLowerArm_LeftLowerArm3_x: <str> len=7
+│   │   ├── LLowerArm_LeftLowerArm3_y: <str> len=7
+│   │   ├── LLowerArm_LeftLowerArm3_z: <str> len=8
+│   │   ├── LLowerArm_LeftLowerArm4_x: <str> len=8
+│   │   ├── LLowerArm_LeftLowerArm4_y: <str> len=7
+│   │   ├── LLowerArm_LeftLowerArm4_z: <str> len=8
+│   │   ├── LHand_LeftHand1_x: <str> len=8
+│   │   ├── LHand_LeftHand1_y: <str> len=8
+│   │   ├── LHand_LeftHand1_z: <str> len=6
+│   │   ├── RShoulder_RightUpperArm_x: <str> len=8
+│   │   ├── RShoulder_RightUpperArm_y: <str> len=8
+│   │   ├── RShoulder_RightUpperArm_z: <str> len=7
+│   │   ├── RUpperArm_RightLowerArm_x: <str> len=7
+│   │   ├── RUpperArm_RightLowerArm_y: <str> len=8
+│   │   ├── RUpperArm_RightLowerArm_z: <str> len=8
+│   │   ├── RUpperArm_RightUpperArm2_x: <str> len=8
+│   │   ├── RUpperArm_RightUpperArm2_y: <str> len=9
+│   │   ├── RUpperArm_RightUpperArm2_z: <str> len=7
+│   │   ├── RUpperArm_RightUpperArm3_x: <str> len=5
+│   │   ├── RUpperArm_RightUpperArm3_y: <str> len=7
+│   │   ├── RUpperArm_RightUpperArm3_z: <str> len=8
+│   │   ├── RLowerArm_RightHand_x: <str> len=6
+│   │   ├── RLowerArm_RightHand_y: <str> len=7
+│   │   ├── RLowerArm_RightHand_z: <str> len=8
+│   │   ├── RLowerArm_RightLowerArm2_x: <str> len=6
+│   │   ├── RLowerArm_RightLowerArm2_y: <str> len=7
+│   │   ├── RLowerArm_RightLowerArm2_z: <str> len=8
+│   │   ├── RLowerArm_RightLowerArm3_x: <str> len=7
+│   │   ├── RLowerArm_RightLowerArm3_y: <str> len=8
+│   │   ├── RLowerArm_RightLowerArm3_z: <str> len=8
+│   │   ├── RLowerArm_RightLowerArm4_x: <str> len=7
+│   │   ├── RLowerArm_RightLowerArm4_y: <str> len=7
+│   │   ├── RLowerArm_RightLowerArm4_z: <str> len=8
+│   │   ├── RHand_RightHand1_x: <str> len=8
+│   │   ├── RHand_RightHand1_y: <str> len=7
+│   │   ├── RHand_RightHand1_z: <str> len=8
+│   │   ├── LUpperLeg_LeftLowerLeg_x: <str> len=8
+│   │   ├── LUpperLeg_LeftLowerLeg_y: <str> len=7
+│   │   ├── LUpperLeg_LeftLowerLeg_z: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg2_x: <str> len=7
+│   │   ├── LUpperLeg_LeftUpperLeg2_y: <str> len=7
+│   │   ├── LUpperLeg_LeftUpperLeg2_z: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg3_x: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg3_y: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg3_z: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg4_x: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg4_y: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg4_z: <str> len=7
+│   │   ├── LUpperLeg_LeftUpperLeg5_x: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg5_y: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg5_z: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg6_x: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg6_y: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg6_z: <str> len=8
+│   │   ├── LLowerLeg_LeftFoot_x: <str> len=5
+│   │   ├── LLowerLeg_LeftFoot_y: <str> len=7
+│   │   ├── LLowerLeg_LeftFoot_z: <str> len=6
+│   │   ├── LLowerLeg_LeftLowerLeg1_x: <str> len=7
+│   │   ├── LLowerLeg_LeftLowerLeg1_y: <str> len=8
+│   │   ├── LLowerLeg_LeftLowerLeg1_z: <str> len=8
+│   │   ├── LLowerLeg_LeftLowerLeg2_x: <str> len=8
+│   │   ├── LLowerLeg_LeftLowerLeg2_y: <str> len=7
+│   │   ├── LLowerLeg_LeftLowerLeg2_z: <str> len=8
+│   │   ├── LLowerLeg_LeftLowerLeg3_x: <str> len=7
+│   │   ├── LLowerLeg_LeftLowerLeg3_y: <str> len=7
+│   │   ├── LLowerLeg_LeftLowerLeg3_z: <str> len=8
+│   │   ├── LLowerLeg_LeftLowerLeg5_x: <str> len=7
+│   │   ├── LLowerLeg_LeftLowerLeg5_y: <str> len=7
+│   │   ├── LLowerLeg_LeftLowerLeg5_z: <str> len=8
+│   │   ├── LLowerLeg_LeftLowerLeg6_x: <str> len=7
+│   │   ├── LLowerLeg_LeftLowerLeg6_y: <str> len=7
+│   │   ├── LLowerLeg_LeftLowerLeg6_z: <str> len=8
+│   │   ├── LFoot_LeftFoot2_x: <str> len=8
+│   │   ├── LFoot_LeftFoot2_y: <str> len=8
+│   │   ├── LFoot_LeftFoot2_z: <str> len=8
+│   │   ├── LFoot_LeftFoot3_x: <str> len=7
+│   │   ├── LFoot_LeftFoot3_y: <str> len=7
+│   │   ├── LFoot_LeftFoot3_z: <str> len=7
+│   │   ├── RUpperLeg_RightLowerLeg_x: <str> len=7
+│   │   ├── RUpperLeg_RightLowerLeg_y: <str> len=7
+│   │   ├── RUpperLeg_RightLowerLeg_z: <str> len=8
+│   │   ├── RUpperLeg_RightUpperLeg2_x: <str> len=8
+│   │   ├── RUpperLeg_RightUpperLeg2_y: <str> len=7
+│   │   ├── RUpperLeg_RightUpperLeg2_z: <str> len=7
+│   │   ├── RUpperLeg_RightUpperLeg3_x: <str> len=7
+│   │   ├── RUpperLeg_RightUpperLeg3_y: <str> len=7
+│   │   ├── RUpperLeg_RightUpperLeg3_z: <str> len=8
+│   │   ├── RUpperLeg_RightUpperLeg4_x: <str> len=7
+│   │   ├── RUpperLeg_RightUpperLeg4_y: <str> len=7
+│   │   ├── RUpperLeg_RightUpperLeg4_z: <str> len=8
+│   │   ├── RUpperLeg_RightUpperLeg5_x: <str> len=6
+│   │   ├── RUpperLeg_RightUpperLeg5_y: <str> len=7
+│   │   ├── RUpperLeg_RightUpperLeg5_z: <str> len=8
+│   │   ├── RUpperLeg_RightUpperLeg6_x: <str> len=7
+│   │   ├── RUpperLeg_RightUpperLeg6_y: <str> len=7
+│   │   ├── RUpperLeg_RightUpperLeg6_z: <str> len=8
+│   │   ├── RLowerLeg_RightFoot_x: <str> len=8
+│   │   ├── RLowerLeg_RightFoot_y: <str> len=7
+│   │   ├── RLowerLeg_RightFoot_z: <str> len=8
+│   │   ├── RLowerLeg_RightLowerLeg1_x: <str> len=7
+│   │   ├── RLowerLeg_RightLowerLeg1_y: <str> len=6
+│   │   ├── RLowerLeg_RightLowerLeg1_z: <str> len=8
+│   │   ├── RLowerLeg_RightLowerLeg2_x: <str> len=8
+│   │   ├── RLowerLeg_RightLowerLeg2_y: <str> len=7
+│   │   ├── RLowerLeg_RightLowerLeg2_z: <str> len=8
+│   │   ├── RLowerLeg_RightLowerLeg3_x: <str> len=6
+│   │   ├── RLowerLeg_RightLowerLeg3_y: <str> len=7
+│   │   ├── RLowerLeg_RightLowerLeg3_z: <str> len=8
+│   │   ├── RLowerLeg_RightLowerLeg5_x: <str> len=7
+│   │   ├── RLowerLeg_RightLowerLeg5_y: <str> len=7
+│   │   ├── RLowerLeg_RightLowerLeg5_z: <str> len=8
+│   │   ├── RLowerLeg_RightLowerLeg6_x: <str> len=8
+│   │   ├── RLowerLeg_RightLowerLeg6_y: <str> len=7
+│   │   ├── RLowerLeg_RightLowerLeg6_z: <str> len=7
+│   │   ├── RFoot_RightFoot2_x: <str> len=7
+│   │   ├── RFoot_RightFoot2_y: <str> len=6
+│   │   ├── RFoot_RightFoot2_z: <str> len=8
+│   │   ├── RFoot_RightFoot3_x: <str> len=7
+│   │   ├── RFoot_RightFoot3_y: <str> len=7
+│   │   ├── RFoot_RightFoot3_z: <str> len=7
+│   │   ├── LFoot_LeftForeFoot_x: <str> len=8
+│   │   ├── LFoot_LeftForeFoot_y: <str> len=7
+│   │   ├── LFoot_LeftForeFoot_z: <str> len=7
+│   │   ├── LForeFoot_LeftForeFoot2_x: <str> len=8
+│   │   ├── LForeFoot_LeftForeFoot2_y: <str> len=7
+│   │   ├── LForeFoot_LeftForeFoot2_z: <str> len=7
+│   │   ├── LForeFoot_LeftForeFoot3_x: <str> len=8
+│   │   ├── LForeFoot_LeftForeFoot3_y: <str> len=7
+│   │   ├── LForeFoot_LeftForeFoot3_z: <str> len=6
+│   │   ├── RFoot_RightForeFoot_x: <str> len=7
+│   │   ├── RFoot_RightForeFoot_y: <str> len=7
+│   │   ├── RFoot_RightForeFoot_z: <str> len=7
+│   │   ├── RForeFoot_RightForeFoot2_x: <str> len=7
+│   │   ├── RForeFoot_RightForeFoot2_y: <str> len=6
+│   │   ├── RForeFoot_RightForeFoot2_z: <str> len=8
+│   │   ├── RForeFoot_RightForeFoot3_x: <str> len=7
+│   │   ├── RForeFoot_RightForeFoot3_y: <str> len=7
+│   │   ├── RForeFoot_RightForeFoot3_z: <str> len=6
+│   │   ├── RForeFoot_RightForeFoot53_x: <str> len=8
+│   │   ├── RForeFoot_RightForeFoot53_y: <str> len=7
+│   │   ├── RForeFoot_RightForeFoot53_z: <str> len=7
+│   │   ├── LForeFoot_LeftForeFoot55_x: <str> len=8
+│   │   ├── LForeFoot_LeftForeFoot55_y: <str> len=7
+│   │   ├── LForeFoot_LeftForeFoot55_z: <str> len=7
+│   │   ├── MC_MC1_x: <str> len=8
+│   │   ├── MC_MC1_y: <str> len=7
+│   │   ├── MC_MC1_z: <str> len=7
+│   │   ├── MC_MC2_x: <str> len=7
+│   │   ├── MC_MC2_y: <str> len=8
+│   │   ├── MC_MC2_z: <str> len=8
+│   │   ├── MC_MC3_x: <str> len=7
+│   │   ├── MC_MC3_y: <str> len=7
+│   │   ├── MC_MC3_z: <str> len=8
+│   │   ├── Pelvis_MC_x: <str> len=8
+│   │   ├── Pelvis_MC_y: <str> len=7
+│   │   ├── Pelvis_MC_z: <str> len=8
+│   │   ├── Pointer_UpperStick_x: <str> len=1
+│   │   ├── Pointer_UpperStick_y: <str> len=1
+│   │   ├── Pointer_UpperStick_z: <str> len=1
+│   │   ├── Pointer_LowerStick_x: <str> len=1
+│   │   ├── Pointer_LowerStick_y: <str> len=1
+│   │   ├── Pointer_LowerStick_z: <str> len=1
+│   │   ├── Pelvis_Pointer_x: <str> len=1
+│   │   ├── Pelvis_Pointer_y: <str> len=1
+│   │   ├── Pelvis_Pointer_z: <str> len=1
+│   │   ├── Pelvis_Pelvis27_x: <str> len=8
+│   │   ├── Pelvis_Pelvis27_y: <str> len=7
+│   │   ├── Pelvis_Pelvis27_z: <str> len=8
+│   │   ├── Pelvis_Pelvis63_x: <str> len=7
+│   │   ├── Pelvis_Pelvis63_y: <str> len=7
+│   │   ├── Pelvis_Pelvis63_z: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg51_x: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg51_y: <str> len=8
+│   │   ├── LUpperLeg_LeftUpperLeg51_z: <str> len=8
+│   │   ├── LLowerLeg_LeftLowerLeg53_x: <str> len=7
+│   │   ├── LLowerLeg_LeftLowerLeg53_y: <str> len=7
+│   │   ├── LLowerLeg_LeftLowerLeg53_z: <str> len=8
+│   │   ├── RLowerLeg_RightLowerLeg57_x: <str> len=7
+│   │   ├── RLowerLeg_RightLowerLeg57_y: <str> len=7
+│   │   ├── RLowerLeg_RightLowerLeg57_z: <str> len=8
+│   │   ├── RUpperLeg_RightUpperLeg55_x: <str> len=7
+│   │   ├── RUpperLeg_RightUpperLeg55_y: <str> len=9
+│   │   ├── RUpperLeg_RightUpperLeg55_z: <str> len=8
+│   │   ├── Thorax_Thorax10_x: <str> len=7
+│   │   ├── Thorax_Thorax10_y: <str> len=8
+│   │   ├── Thorax_Thorax10_z: <str> len=8
+│   │   ├── Thorax_Thorax69_x: <str> len=7
+│   │   ├── Thorax_Thorax69_y: <str> len=7
+│   │   ├── Thorax_Thorax69_z: <str> len=8
+│   │   ├── Thorax_Thorax70_x: <str> len=7
+│   │   ├── Thorax_Thorax70_y: <str> len=7
+│   │   └── Thorax_Thorax70_z: <str> len=8
+│   └── header: dict (keys=4)
+│       ├── points: dict (keys=4)
+│       │   ├── size: <int> scalar
+│       │   ├── frame_rate: <float> scalar
+│       │   ├── first_frame: <int> scalar
+│       │   └── last_frame: <int> scalar
+│       ├── analogs: dict (keys=4)
+│       │   ├── size: <int> scalar
+│       │   ├── frame_rate: <float> scalar
+│       │   ├── first_frame: <int> scalar
+│       │   └── last_frame: <int> scalar
+│       ├── rotations: dict (keys=4)
+│       │   ├── size: <int> scalar
+│       │   ├── frame_rate: <float> scalar
+│       │   ├── first_frame: <int> scalar
+│       │   └── last_frame: <int> scalar
+│       └── events: dict (keys=3)
+│           ├── size: <int> scalar
+│           ├── events_time: <np.ndarray[float64]> shape=(18), n=18
+│           └── events_label: <str> len=0
+└── events: dict (keys=3)
+    ├── event_times: <np.ndarray[float64]> shape=(16), n=16
+    ├── event_labels: <np.ndarray[<U17]> shape=(16), n=16
+    └── kinetic: <np.ndarray[uint8]> shape=(16), n=16
