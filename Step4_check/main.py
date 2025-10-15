@@ -27,6 +27,7 @@ from . import emg as emg_mod
 from . import audit_log
 from .history import History, SelectionEdit
 from . import plotting
+from . import qc
 
 @dataclass
 class PageSpec:
@@ -270,7 +271,7 @@ def resolve_key(cdict: Dict[str, Any], actual_key: str):
             except Exception:
                 pass
             pairs.append((nm, np.asarray(a).reshape(-1)))
-        print(f"[analog_many] key='{actual_key}' matched={len(pairs)}")
+        #print(f"[analog_many] key='{actual_key}' matched={len(pairs)}")
         return (pairs, "analog_many") if pairs else (None, "")
     pt = cdict.get("point", {})
     if isinstance(pt, dict) and actual_key in pt:
@@ -497,6 +498,13 @@ class PlotCell(QtWidgets.QWidget):
                                 "param": nm,
                                 "coord": "",
                                 "time": self._time_meta_from_cycle(cdict, group_hint="analog", npts=a101.shape[0]),
+                                "reconstruction_ok": int(cdict.get("reconstruction_ok", 1)) == 1,
+                                "IK_RMS_ok": bool(cdict.get("IK_RMS_ok", True)),
+                                "IK_MAX_ok": bool(cdict.get("IK_MAX_ok", True)),
+                                "SO_F_RMS_ok": bool(cdict.get("SO_F_RMS_ok", True)),
+                                "SO_F_MAX_ok": bool(cdict.get("SO_F_MAX_ok", True)),
+                                "SO_M_RMS_ok": bool(cdict.get("SO_M_RMS_ok", True)),
+                                "SO_M_MAX_ok": bool(cdict.get("SO_M_MAX_ok", True)),
                             })
                             ln.set_pickradius(self._hover_pick_tol)
                             line_map[ln] = SelectionItem(cycle_ref=(fi, stride_side, cyc_name), param=nm)
@@ -518,6 +526,14 @@ class PlotCell(QtWidgets.QWidget):
                                 "param": actual_key,                        # base key (e.g., "LHipAngles")
                                 "coord": coord_label,                       # "x"/"y"/"z"
                                 "time": time_meta,
+                                "reconstruction_ok": int(cdict.get("reconstruction_ok", 1)) == 1,
+                                "IK_RMS_ok": bool(cdict.get("IK_RMS_ok", True)),
+                                "IK_MAX_ok": bool(cdict.get("IK_MAX_ok", True)),
+                                "SO_F_RMS_ok": bool(cdict.get("SO_F_RMS_ok", True)),
+                                "SO_F_MAX_ok": bool(cdict.get("SO_F_MAX_ok", True)),
+                                "SO_M_RMS_ok": bool(cdict.get("SO_M_RMS_ok", True)),
+                                "SO_M_MAX_ok": bool(cdict.get("SO_M_MAX_ok", True)),
+
                             })
                             ln.set_pickradius(self._hover_pick_tol)
                             line_map[ln] = SelectionItem(cycle_ref=(fi, stride_side, cyc_name), param=f"{actual_key}[{j}]")
@@ -535,13 +551,20 @@ class PlotCell(QtWidgets.QWidget):
                             "param": actual_key,                        # the selected signal key
                             "coord": "",                                # 1-D signal
                             "time": self._time_meta_from_cycle(cdict, group_hint="point", npts=a101.shape[0]),
+                            "reconstruction_ok": int(cdict.get("reconstruction_ok", 1)) == 1,
+                            "IK_RMS_ok": bool(cdict.get("IK_RMS_ok", True)),
+                            "IK_MAX_ok": bool(cdict.get("IK_MAX_ok", True)),
+                            "SO_F_RMS_ok": bool(cdict.get("SO_F_RMS_ok", True)),
+                            "SO_F_MAX_ok": bool(cdict.get("SO_F_MAX_ok", True)),
+                            "SO_M_RMS_ok": bool(cdict.get("SO_M_RMS_ok", True)),
+                            "SO_M_MAX_ok": bool(cdict.get("SO_M_MAX_ok", True)),
                         })
                         ln.set_pickradius(self._hover_pick_tol)
                         line_map[ln] = SelectionItem(cycle_ref=(fi, stride_side, cyc_name), param=actual_key)
         self.ax.set_ylabel(display_key); self.ax.set_xlabel("% cycle"); self.canvas.draw_idle()
         self.selector = SelectionManager(self.ax, line_map, mode=("deselect" if current_mode=="deselect" else "select"), on_result=self._on_rect); self.selector.set_active(True)
     def _on_rect(self, items: List[SelectionItem], mode: str, bbox):
-        print(f"[select] emitting {len(items)} items, mode={mode}")
+        #print(f"[select] emitting {len(items)} items, mode={mode}")
         self.selectionMade.emit(items, mode)
 
 class PlotPage(QtWidgets.QWidget):
@@ -580,7 +603,8 @@ class PlotPage(QtWidgets.QWidget):
             if k in seen: continue
             seen.add(k); changes.append((fi, stride_side, cyc, new_val))
         if changes:
-            print(f"[page] selection changes={len(changes)}"); self.selectionApplied.emit(changes)
+            #print(f"[page] selection changes={len(changes)}"); 
+            self.selectionApplied.emit(changes)
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self) -> None:
@@ -697,7 +721,45 @@ class MainWindow(QtWidgets.QMainWindow):
         self.history = History()
         # a store the SelectionEdit can mutate
         self._selection_store = {}  # { (fi, side, cyc): 0/1 }
+    
+    def _apply_qc_flags(self, data_dict: Dict[str, Any]) -> None:
+        """
+        Evaluate per-cycle QC flags (IK and SO) in-place on `data_dict`.
 
+        - Adds/keeps: reconstruction_ok (placeholder True), IK_RMS_ok, IK_MAX_ok,
+                      SO_F_RMS_ok, SO_F_MAX_ok, SO_M_RMS_ok, SO_M_MAX_ok
+        - Flags are consumed by plotting (dashed linestyle if any fail).
+        """
+        meta = data_dict.get("meta", {})  # for SO timing & sampling info
+        for side in ("left_stride", "right_stride"):
+            block = data_dict.get(side, {})
+            if not isinstance(block, dict):
+                continue
+            for cyc_name, cyc in block.items():
+                if not isinstance(cyc, dict):
+                    continue
+
+                # Ensure baseline keys exist
+                cyc.setdefault("manually_selected", 1)
+                cyc.setdefault("reconstruction_ok", True)  # placeholder pass
+
+                # IK flags (max over time vs thresholds)
+                try:
+                    cyc.update(qc.eval_ik_flags(cyc))
+                except Exception:
+                    # missing or malformed IK -> evaluator treats as pass, but guard anyway
+                    cyc.setdefault("IK_RMS_ok", True)
+                    cyc.setdefault("IK_MAX_ok", True)
+
+                # SO flags (RMS & MAX in contralateral SLS window)
+                try:
+                    # evaluator needs the cycle dict, the indexing side, and meta for sampling
+                    cyc.update(qc.eval_so_flags(cyc, side, meta))
+                except Exception:
+                    cyc.setdefault("SO_F_RMS_ok", True)
+                    cyc.setdefault("SO_F_MAX_ok", True)
+                    cyc.setdefault("SO_M_RMS_ok", True)
+                    cyc.setdefault("SO_M_MAX_ok", True)
     def set_mode(self, mode: str):
         self.current_mode = "select" if mode=="select" else "deselect"; self.lbl_mode.setText(f"Mode: {self.current_mode.upper()}")
         for page, _ in self.pages:
@@ -718,8 +780,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if not path: return
         self.root_edit.setText(path); self.set_root(path)
     def set_root(self, root: str):
-        print(f"[root] {root}")
-        files = scan_root(root); print(f"[scan] matched {len(files)} files")
+        #print(f"[root] {root}")
+        files = scan_root(root); #print(f"[scan] matched {len(files)} files")
         self.participants, self.trial_types_by_pid, self.files_by_pid_type = build_indices(files)
         self.cmb_pid.blockSignals(True); self.cmb_pid.clear(); self.cmb_pid.addItems(self.participants); self.cmb_pid.blockSignals(False)
         if self.participants: self.cmb_pid.setCurrentIndex(0); self.on_pid_changed(self.participants[0])
@@ -739,7 +801,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._last_pid = pid  # remember for potential revert next time
 
         types = self.trial_types_by_pid.get(pid, [])
-        print(f"[pid] {pid} types={types}")
+        #print(f"[pid] {pid} types={types}")
         self.cmb_trial.blockSignals(True)
         self.cmb_trial.clear()
         self.cmb_trial.addItems(types)
@@ -768,11 +830,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         pid = self.cmb_pid.currentText().strip()
         metas = self.files_by_pid_type.get(pid, {}).get(trial, [])
-        print(f"[trial] {pid}/{trial}: files={len(metas)}")
+        #print(f"[trial] {pid}/{trial}: files={len(metas)}")
         self.loaded = []
         for i, fm in enumerate(metas):
             try:
                 d = load_dict(fm.path)
+                self._apply_qc_flags(d) # populate IK/SO flags per cycle so lines can style themselves
                 cycles: List[CyclePtr] = []
                 for stride_side in ("left_stride","right_stride"):
                     block = d.get(stride_side, {})

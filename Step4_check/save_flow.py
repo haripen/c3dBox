@@ -31,7 +31,13 @@ except Exception:  # pragma: no cover - optional
     QtGui = None  # type: ignore
     QKeySequence = None  # type: ignore
 
+    
 # Project-local imports
+try:
+    from . import qc as _qc  # type: ignore
+except Exception:
+    _qc = None  # type: ignore
+    
 try:
     from . import io_mat  # type: ignore
 except Exception:
@@ -152,6 +158,36 @@ class SaveController:
             flags = c.get("flags", {})
             cur = 1 if (flags.get("manually_selected", 1) in (1, True)) else 0
             self._baseline_sel[cid] = cur
+
+    def _ensure_qc_flags_before_save(self) -> None:
+        """
+        Ensure each cycle dict has the QC keys expected by FIELDS_TO_SAVE.
+        If the qc module is available, (re)compute; otherwise set safe defaults.
+        """
+        data = self.data or {}
+        meta = data.get("meta", {})
+        for side in ("left_stride", "right_stride"):
+            block = data.get(side, {})
+            if not isinstance(block, dict):
+                continue
+            for name, cyc in block.items():
+                if not isinstance(cyc, dict):
+                    continue
+                cyc.setdefault("reconstruction_ok", True)
+                if _qc is not None:
+                    try:
+                        cyc.update(_qc.eval_ik_flags(cyc))
+                    except Exception:
+                        pass
+                    try:
+                        cyc.update(_qc.eval_so_flags(cyc, side, meta))
+                    except Exception:
+                        pass
+                # Defaults if still missing:
+                cyc.setdefault("IK_RMS_ok", True)
+                cyc.setdefault("IK_MAX_ok", True)
+                for k in ("SO_F_RMS_ok","SO_F_MAX_ok","SO_M_RMS_ok","SO_M_MAX_ok"):
+                    cyc.setdefault(k, True)
 
     def _merge_cycle_flags_back(self) -> None:
         """Write whitelisted cycle flags back into the main data dict."""
@@ -285,6 +321,8 @@ class SaveController:
         Returns:
             The path to the saved *_check.mat.
         """
+        # make sure QC flags are present
+        self._ensure_qc_flags_before_save()
         # username – this may bring up a prompt
         self._choose_username(parent)
 

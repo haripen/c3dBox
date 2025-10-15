@@ -13,10 +13,8 @@ Flags added when the respective data exist (and True if data missing):
 - "SO_M_MAX_ok":   MAX(|MX|,|MY|,|MZ| in SLS window) <= settings.so.moment_max_max
 
 SLS window = contralateral Foot_Off → contralateral Foot_Strike mapped to
-SO_forces["time"]. We skip n_skip frames at both window ends where:
-- Primary: n_skip = int(points_fs / so_frames_tol) when "so_frames_tol" is present.
-- Alias:   n_skip = int(points_fs * (so_ms_tol / 1000.0)) when "so_ms_tol" (milliseconds) is present.
-points_fs = meta['header']['points']['frame_rate'].
+SO_forces["time"]. We skip n_skip frames at both window ends where
+n_skip = int(points_fs / so_ms_tol), with points_fs = meta['header']['points']['frame_rate'].
 
 If any required arrays are missing or empty, the corresponding flag is set to True
 ("pass") rather than failing the cycle.
@@ -27,14 +25,14 @@ Usage:
 """
 from __future__ import annotations
 from typing import Any, Dict, Optional, Tuple
+import math
 import json
 from pathlib import Path
 import numpy as np
 
-# Try to use central settings manager for IK (kept), but SO loads JSON directly per user request.
 try:
     # settings.get(key_path, default=None)
-    from .settings import get as settings_get  # type: ignore
+    from .settings import get as settings_get
 except Exception:  # pragma: no cover
     settings_get = None  # Fallback later
 
@@ -42,6 +40,25 @@ except Exception:  # pragma: no cover
 # ------------------------------
 # Internal helpers
 # ------------------------------
+
+def _get_setting(path: str, default: Any) -> Any:
+    """Fetch a setting value from settings.py if available, otherwise fallback.
+
+    Parameters
+    ----------
+    path : str
+        Dotted path key, e.g., 'ik.marker_error_RMS_max'.
+    default : Any
+        Default to return if settings are unavailable or the key is missing.
+    """
+    if settings_get is None:
+        return default
+    try:
+        val = settings_get(path)
+    except Exception:
+        return default
+    return default if val is None else val
+
 
 def _safe_get(d: Dict[str, Any], *keys: str, default: Any = None) -> Any:
     """Safely walk nested dicts: _safe_get(d, 'a', 'b', default=...) -> d['a']['b'] or default."""
@@ -58,14 +75,14 @@ def _is_array_like(x: Any) -> bool:
 
 
 def _rms(arr: np.ndarray) -> float:
-    arr = np.asarray(arr, dtype=float)
+    arr = np.asarray(arr)
     if arr.size == 0:
         return 0.0
-    return float(np.sqrt(np.mean(np.square(arr))))
+    return float(np.sqrt(np.mean(np.square(arr, dtype=float))))
 
 
 def _max_abs(arr: np.ndarray) -> float:
-    arr = np.asarray(arr, dtype=float)
+    arr = np.asarray(arr)
     if arr.size == 0:
         return 0.0
     return float(np.max(np.abs(arr)))
@@ -85,24 +102,6 @@ def _contralateral_events(side: str) -> Tuple[str, str]:
         return 'Left_Foot_Off', 'Left_Foot_Strike'
 
 
-def _as_scalar_time(x: Any) -> Optional[float]:
-    """Return a float time from possibly nested 1-element arrays/lists, else None."""
-    if x is None:
-        return None
-    try:
-        arr = np.asarray(x, dtype=float)
-    except Exception:
-        try:
-            return float(x)  # type: ignore[arg-type]
-        except Exception:
-            return None
-    if arr.shape == ():              # 0-D numpy
-        return float(arr)  # type: ignore[return-value]
-    if arr.size == 1:                # 1-element list/array/[[...]]
-        return float(arr.reshape(-1)[0])
-    return None
-
-
 def _window_indices_from_times(
     t_series: np.ndarray,
     t0: Optional[float],
@@ -120,51 +119,18 @@ def _window_indices_from_times(
     if t1 <= t0:
         return None
 
-    ts = np.asarray(t_series, dtype=float)
     # Find first idx >= t0 and last idx <= t1
-    i0 = int(np.searchsorted(ts, t0, side='left'))
-    i1 = int(np.searchsorted(ts, t1, side='right')) - 1
+    # Assumption: t_series is non-decreasing
+    i0 = int(np.searchsorted(t_series, t0, side='left'))
+    i1 = int(np.searchsorted(t_series, t1, side='right')) - 1
 
     # Bound and crop
     i0 = max(0, i0 + max(0, int(n_skip)))
-    i1 = min(len(ts) - 1, i1 - max(0, int(n_skip)))
+    i1 = min(len(t_series) - 1, i1 - max(0, int(n_skip)))
 
     if i1 < i0:
         return None
     return i0, i1
-
-
-# ------------------------------
-# Settings helpers
-# ------------------------------
-
-def _load_local_settings() -> Dict[str, Any]:
-    """Load settings.json that sits next to this file (no indirection)."""
-    path = Path(__file__).with_name("settings.json").resolve()
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-
-
-def _deep_get(d: Dict[str, Any], dotted: str, default: Any) -> Any:
-    cur: Any = d
-    for part in dotted.split("."):
-        if not isinstance(cur, dict) or part not in cur:
-            return default
-        cur = cur[part]
-    return cur
-
-
-def _get_setting(path: str, default: Any) -> Any:
-    """Robust getter used by IK: use settings.get if available, else load local JSON directly."""
-    if settings_get is not None:
-        try:
-            val = settings_get(path, default)  # type: ignore[misc]
-            return val
-        except Exception:
-            pass
-    return _deep_get(_load_local_settings(), path, default)
 
 
 # ------------------------------
@@ -173,6 +139,12 @@ def _get_setting(path: str, default: Any) -> Any:
 
 def eval_ik_flags(cycle: Dict[str, Any]) -> Dict[str, bool]:
     """Evaluate IK marker error flags for a single cycle.
+
+    Parameters
+    ----------
+    cycle : dict
+        Cycle dict which may contain 'IK_markerErr' sub-dict with time-discrete
+        arrays 'marker_error_RMS' and 'marker_error_max'.
 
     Returns
     -------
@@ -214,9 +186,7 @@ def eval_so_flags(
 
     The evaluation is restricted to single-limb stance (contralateral Foot_Off
     → contralateral Foot_Strike) mapped into SO_forces["time"]. We skip a fixed
-    number of frames at both window ends:
-      * Primary: n_skip = int(points_fs / so_frames_tol)
-      * Alias:   n_skip = int(points_fs * (so_ms_tol / 1000.0))
+    number of frames at both window ends: n_skip = int(points_fs / so_ms_tol).
 
     Parameters
     ----------
@@ -234,51 +204,30 @@ def eval_so_flags(
         {'SO_F_RMS_ok','SO_F_MAX_ok','SO_M_RMS_ok','SO_M_MAX_ok'} booleans.
         Missing/invalid data -> all True.
     """
-    # --- load settings.json directly (per user request) ---
-    conf = _load_local_settings()
-
-    def sget(path: str, default: Any) -> Any:
-        return _deep_get(conf, path, default)
-
     # Thresholds
-    f_rms_thr = float(sget('so.force_rms_max', 10.0))
-    f_max_thr = float(sget('so.force_max_max', 25.0))
-    m_rms_thr = float(sget('so.moment_rms_max', 50.0))
-    m_max_thr = float(sget('so.moment_max_max', 75.0))
-
+    f_rms_thr = float(_get_setting('so.force_rms_max', 10.0))
+    f_max_thr = float(_get_setting('so.force_max_max', 25.0))
+    m_rms_thr = float(_get_setting('so.moment_rms_max', 50.0))
+    m_max_thr = float(_get_setting('so.moment_max_max', 75.0))
+    so_ms_tol = float(_get_setting('so.so_ms_tol', 10.0))
+    print(f"[debug HP] {f_rms_thr}")
     # Sampling: points fs for skip calculation
     points_fs = float(_safe_get(meta or {}, 'header', 'points', 'frame_rate', default=0.0) or 0.0)
+    n_skip = int(points_fs / so_ms_tol) if so_ms_tol > 0 else 0
 
-    # Frames to skip at each end of SLS window
-    so_frames_tol = sget('so.so_frames_tol', None)
-    so_ms_tol = sget('so.so_ms_tol', None)
-    if so_frames_tol is not None and points_fs > 0:
-        try:
-            so_frames_tol = float(so_frames_tol)
-        except Exception:
-            so_frames_tol = None
-    if so_ms_tol is not None and points_fs > 0:
-        try:
-            so_ms_tol = float(so_ms_tol)
-        except Exception:
-            so_ms_tol = None
-
-    if isinstance(so_frames_tol, (int, float)) and so_frames_tol and points_fs > 0:
-        n_skip = int(points_fs / float(so_frames_tol))
-    elif isinstance(so_ms_tol, (int, float)) and so_ms_tol and points_fs > 0:
-        n_skip = int(points_fs * (float(so_ms_tol) / 1000.0))
-    else:
-        # Fallback: keep former default logic (10 as divisor)
-        n_skip = int(points_fs / 10.0) if points_fs > 0 else 0
-
-    # Access contralateral events (normalize to scalar times)
+    # Access contralateral events
     off_key, str_key = _contralateral_events(side)
-    t_off = _as_scalar_time(_safe_get(cycle, off_key, 'time', default=None))
-    t_str = _as_scalar_time(_safe_get(cycle, str_key, 'time', default=None))
+    t_off = _safe_get(cycle, off_key, 'time', default=None)
+    t_str = _safe_get(cycle, str_key, 'time', default=None)
 
     so = _safe_get(cycle, 'SO_forces', default=None)
     if not isinstance(so, dict):
-        return {'SO_F_RMS_ok': True, 'SO_F_MAX_ok': True, 'SO_M_RMS_ok': True, 'SO_M_MAX_ok': True}
+        return {
+            'SO_F_RMS_ok': True,
+            'SO_F_MAX_ok': True,
+            'SO_M_RMS_ok': True,
+            'SO_M_MAX_ok': True,
+        }
 
     t_series = _safe_get(so, 'time', default=None)
     FX = _safe_get(so, 'FX', default=None)
@@ -291,7 +240,12 @@ def eval_so_flags(
     # Validate availability
     arrays_ok = all(_is_array_like(x) for x in (t_series, FX, FY, FZ, MX, MY, MZ))
     if not arrays_ok:
-        return {'SO_F_RMS_ok': True, 'SO_F_MAX_ok': True, 'SO_M_RMS_ok': True, 'SO_M_MAX_ok': True}
+        return {
+            'SO_F_RMS_ok': True,
+            'SO_F_MAX_ok': True,
+            'SO_M_RMS_ok': True,
+            'SO_M_MAX_ok': True,
+        }
 
     t_series = np.asarray(t_series, dtype=float)
     FX = np.asarray(FX, dtype=float)
@@ -302,12 +256,22 @@ def eval_so_flags(
     MZ = np.asarray(MZ, dtype=float)
 
     if t_series.size == 0:
-        return {'SO_F_RMS_ok': True, 'SO_F_MAX_ok': True, 'SO_M_RMS_ok': True, 'SO_M_MAX_ok': True}
+        return {
+            'SO_F_RMS_ok': True,
+            'SO_F_MAX_ok': True,
+            'SO_M_RMS_ok': True,
+            'SO_M_MAX_ok': True,
+        }
 
-    # Map window and crop by n_skip (robust to tiny windows)
+    # Map window and crop by n_skip
     win = _window_indices_from_times(t_series, t_off, t_str, n_skip)
     if win is None:
-        return {'SO_F_RMS_ok': True, 'SO_F_MAX_ok': True, 'SO_M_RMS_ok': True, 'SO_M_MAX_ok': True}
+        return {
+            'SO_F_RMS_ok': True,
+            'SO_F_MAX_ok': True,
+            'SO_M_RMS_ok': True,
+            'SO_M_MAX_ok': True,
+        }
 
     i0, i1 = win
     sl = slice(i0, i1 + 1)
@@ -318,7 +282,7 @@ def eval_so_flags(
 
     m_rms = max(_rms(MX[sl]), _rms(MY[sl]), _rms(MZ[sl]))
     m_max = max(_max_abs(MX[sl]), _max_abs(MY[sl]), _max_abs(MZ[sl]))
-    print(f_rms_thr)
+
     return {
         'SO_F_RMS_ok': f_rms <= f_rms_thr,
         'SO_F_MAX_ok': f_max <= f_max_thr,
@@ -333,13 +297,33 @@ def qc_cycle(
     meta: Optional[Dict[str, Any]] = None,
     set_missing_flags_true: bool = True,
 ) -> Dict[str, Any]:
-    """Run QC on a single cycle and set flags in-place."""
+    """Run QC on a single cycle and set flags in-place.
+
+    Parameters
+    ----------
+    cycle : dict
+        A cycle dictionary to annotate.
+    side : {'left_stride','right_stride'}
+        Which stride the cycle belongs to.
+    meta : dict, optional
+        Root meta dict (for points frame rate).
+    set_missing_flags_true : bool
+        If True, explicitly set flags to True when data are missing; if False,
+        leave those flags absent.
+
+    Returns
+    -------
+    dict
+        The same cycle dict (mutated) for convenience.
+    """
     # IK
     ik_flags = eval_ik_flags(cycle)
     # SO
     so_flags = eval_so_flags(cycle, side=side, meta=meta)
 
-    # Detect presence for conditional writing
+    # When set_missing_flags_true=False, only write flags if we actually evaluated
+    # (i.e., not all True by default due to missing data). We detect this by
+    # checking presence of the relevant sub-dicts.
     ik_present = isinstance(_safe_get(cycle, 'IK_markerErr', default=None), dict)
     so_present = isinstance(_safe_get(cycle, 'SO_forces', default=None), dict)
 
@@ -356,7 +340,22 @@ def qc_cycle(
 
 
 def qc_all(root: Dict[str, Any]) -> Dict[str, Any]:
-    """Run QC over all cycles in root dict (mutates in place)."""
+    """Run QC over all cycles in root dict (mutates in place).
+
+    The function looks for 'left_stride' and 'right_stride' keys, then for
+    children 'cycle*' (any key starting with 'cycle'). Missing branches are
+    simply skipped.
+
+    Parameters
+    ----------
+    root : dict
+        Root dictionary containing side branches and 'meta'.
+
+    Returns
+    -------
+    dict
+        The same root dict (mutated) for convenience.
+    """
     if not isinstance(root, dict):
         return root
 

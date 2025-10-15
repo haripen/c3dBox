@@ -1,3 +1,4 @@
+
 """
 c3dBox.Step4_check.settings
 
@@ -18,7 +19,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, Tuple
 
 # ----- Defaults (kept in code for reset) -----
 DEFAULTS: Dict[str, Any] = {
@@ -29,14 +30,12 @@ DEFAULTS: Dict[str, Any] = {
         "moment_rms_max": 50,
         "moment_max_max": 75,
         "so_frames_tol": 10,
-        # optional alias accepted by validator if present:
-        # "so_ms_tol": 10
     },
     "ui": {"start_fullscreen": True, "ylim_margin_pct": 0.05},
 }
 
 # Path to the json next to this file
-SETTINGS_PATH = Path(__file__).with_name("settings.json").resolve()
+SETTINGS_PATH = Path(__file__).with_name("settings.json")
 
 # Module-level cache
 _CACHE: Dict[str, Any] | None = None
@@ -54,20 +53,11 @@ _SCHEMA: Dict[str, Dict[str, Any]] = {
         "moment_rms_max": {"type": _NUMBER, "check": lambda v: v >= 0},
         "moment_max_max": {"type": _NUMBER, "check": lambda v: v >= 0},
         "so_frames_tol": {"type": int, "check": lambda v: v >= 0},
-        # optional alias (milliseconds); allowed but not required:
-        "so_ms_tol": {"type": _NUMBER, "check": lambda v: v >= 0},
     },
     "ui": {
         "start_fullscreen": {"type": bool, "check": lambda v: isinstance(v, bool)},
         "ylim_margin_pct": {"type": _NUMBER, "check": lambda v: 0 <= v < 1},
     },
-}
-
-# which keys are optional in each section (subset of schema keys)
-_OPTIONAL_FIELDS: Dict[str, set[str]] = {
-    "so": {"so_ms_tol"},
-    "ik": set(),
-    "ui": set(),
 }
 
 class _Missing:
@@ -78,40 +68,40 @@ def _deepcopy_dict(d: Dict[str, Any]) -> Dict[str, Any]:
     return json.loads(json.dumps(d))
 
 def _validate(data: Dict[str, Any]) -> None:
-    """Minimal schema & range/type validation. Raises ValueError with clear messages.
-
-    Allows optional keys listed in _OPTIONAL_FIELDS.
-    Unknown keys outside schema+optional are ignored (not an error).
-    """
-    # Top-level keys must exist (others ignored)
+    """Minimal schema & range/type validation. Raises ValueError with clear messages."""
+    # Top-level keys
     expected_top = set(_SCHEMA.keys())
-    for section in expected_top:
-        if section not in data:
-            raise ValueError(f"settings.json is missing top-level section: '{section}'")
+    found_top = set(data.keys())
+    missing = expected_top - found_top
+    unknown = found_top - expected_top
+    if missing:
+        raise ValueError(f"settings.json is missing top-level section(s): {sorted(missing)}")
+    if unknown:
+        raise ValueError(f"settings.json has unknown top-level section(s): {sorted(unknown)}")
 
     # Per-section fields
     for section, fields in _SCHEMA.items():
         sec = data.get(section, {})
         expected_fields = set(fields.keys())
         found_fields = set(sec.keys())
-
-        # Missing required fields (schema minus optional)
-        required = expected_fields - _OPTIONAL_FIELDS.get(section, set())
-        miss = required - found_fields
+        miss = expected_fields - found_fields
+        unk = found_fields - expected_fields
         if miss:
-            raise ValueError(f"Section '{section}' missing required field(s): {sorted(miss)}")
+            raise ValueError(f"Section '{section}' missing field(s): {sorted(miss)}")
+        if unk:
+            raise ValueError(f"Section '{section}' has unknown field(s): {sorted(unk)}")
 
-        # Type & simple range checks for intersection of provided∩schema
-        for key in (found_fields & expected_fields):
-            rule = fields[key]
+        # Type & simple range checks
+        for key, rule in fields.items():
             val = sec[key]
             typ = rule["type"]
             if not isinstance(val, typ):
-                # Accept JSON numbers that load as int for float fields
+                # Accept JSON numbers that load as int for float fields (int is instance of int only).
                 if typ is _NUMBER and isinstance(val, (int, float)):
                     pass
                 else:
                     raise ValueError(f"Invalid type for '{section}.{key}': expected {typ}, got {type(val).__name__}")
+
             chk = rule.get("check")
             if chk and not chk(val):
                 raise ValueError(f"Invalid value for '{section}.{key}': failed validation check (value={val!r})")
@@ -179,8 +169,8 @@ def get(path: str, default: Any | _Missing = _MISSING) -> Any:
     return _get_from_dict(data, path, default)
 
 
-def _set_in_dict(d: Dict[str, Any], path: list[str], value: Any) -> None:
-    *parents, last = path
+def _set_in_dict(d: Dict[str, Any], path: Iterable[str], value: Any) -> None:
+    *parents, last = list(path)
     cur = d
     for p in parents:
         if p not in cur or not isinstance(cur[p], dict):
@@ -281,6 +271,7 @@ class Settings:
     def reset_to_defaults():
         return _settings_mod.reset_to_defaults()
 
+# Optional: export in __all__ for clarity (not required for direct import)
 try:
     __all__.append("Settings")  # type: ignore[name-defined]
 except Exception:
