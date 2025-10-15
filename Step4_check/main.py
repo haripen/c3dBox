@@ -9,6 +9,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import QMessageBox, QInputDialog
 from pathlib import Path
+import json
 
 from matplotlib.figure import Figure
 try:
@@ -25,7 +26,87 @@ from .status import compute_counts, StatusWidget, compute_counts_by_side_and_mod
 from . import emg as emg_mod
 from . import audit_log
 from .history import History, SelectionEdit
+from . import plotting
 
+@dataclass
+class PageSpec:
+    name: str
+    rows: int
+    cols: int
+    coord_map: List[Optional[int]]
+    defaults: List[str]
+    xlabel: str = "% cycle"
+
+_re_layout_idx = re.compile(r"layout_page(\d+)\.json$", re.IGNORECASE)
+
+def _to_generic_display(opt: str) -> str:
+    """
+    Convert 'LHipAngles'/'RHipAngles' -> 'HipAngles'. Leave others unchanged.
+    """
+    if not isinstance(opt, str):
+        return ""
+    return re.sub(r"^[LR](?=[A-Z])", "", opt).strip()
+
+def _discover_layout_jsons() -> List[Path]:
+    here = Path(__file__).resolve().parent
+    files = list(here.glob("layout_page*.json"))
+    def _idx(p: Path) -> int:
+        m = _re_layout_idx.search(p.name)
+        return int(m.group(1)) if m else 10_000
+    return sorted(files, key=_idx)
+
+def _parse_layout_json(p: Path) -> PageSpec:
+    js = json.loads(p.read_text(encoding="utf-8"))
+    name = js.get("name") or p.stem.replace("_", " ").title()
+    rows = int(js.get("rows", 3))
+    cols = int(js.get("cols", 6))
+    xlabel = js.get("x_axis_label", "% cycle")
+    cells = js.get("cells") or []
+    if rows == 3:
+        # allow per-row defaults via 'default_by_row': [x, y, z] (or dict with keys 'x','y','z')
+        col_defaults_xyz: List[List[str]] = []
+        for c in range(cols):
+            cell = cells[c] if c < len(cells) else {}
+            by_row = cell.get("default_by_row") or cell.get("defaults_by_row")
+            if isinstance(by_row, dict):
+                triplet = [by_row.get("x") or by_row.get("row1"),
+                           by_row.get("y") or by_row.get("row2"),
+                           by_row.get("z") or by_row.get("row3")]
+            elif isinstance(by_row, (list, tuple)):
+                vals = list(by_row)
+                while len(vals) < 3:
+                    vals.append(vals[-1] if vals else "")
+                triplet = vals[:3]
+            else:
+                base = cell.get("default") or cell.get("title") or ""
+                triplet = [base, base, base]
+            col_defaults_xyz.append([_to_generic_display(v or "") for v in triplet])
+
+        # flatten into row-major order: row0 all cols, then row1, then row2
+        defaults: List[str] = []
+        for row_idx in range(3):
+            for c in range(cols):
+                defaults.append(col_defaults_xyz[c][row_idx])
+        coord_map = [0]*cols + [1]*cols + [2]*cols
+    else:
+        coord_map = [None] * (rows * cols)
+        defaults = []
+        for r in range(rows):
+            for c in range(cols):
+                cell = cells[c] if c < len(cells) else {}
+                default = cell.get("default") or cell.get("title") or ""
+                defaults.append(_to_generic_display(default))
+    return PageSpec(name=name, rows=rows, cols=cols, coord_map=coord_map, defaults=defaults, xlabel=xlabel)
+
+def _load_page_specs_from_json() -> List[PageSpec]:
+    specs: List[PageSpec] = []
+    for p in _discover_layout_jsons():
+        try:
+            specs.append(_parse_layout_json(p))
+        except Exception as e:
+            print(f"[layout] skip {p.name}: {e!r}")
+    return specs
+    
 LEFT_COLOR = "#d62728"
 RIGHT_COLOR = "#1f77b4"
 
@@ -370,21 +451,12 @@ class PlotCell(QtWidgets.QWidget):
         if self.selector is not None: self.selector.disconnect(); self.selector=None
         self.canvas.draw_idle()
     def autoscale(self):
-        lines = [ln for ln in self.ax.lines if ln.get_visible()]
-        if not lines: return
-        ys = []
-        for ln in lines:
-            y = np.asarray(ln.get_ydata(orig=False)); y = y[np.isfinite(y)]
-            if y.size: ys.append((float(np.min(y)), float(np.max(y))))
-        if not ys: return
-        ymin = min(lo for lo,hi in ys); ymax = max(hi for lo,hi in ys)
-        if not np.isfinite([ymin, ymax]).all(): return
-        if ymax <= ymin:
-            span = 1.0; self.ax.set_ylim(ymin - 0.5*span, ymax + 0.5*span)
-        else:
-            span = ymax - ymin; pad = max(0.05*span, 1e-6)
-            self.ax.set_ylim(ymin - pad, ymax + pad)
-        self.canvas.draw_idle()
+        # Use helper that autoscale both X & Y for visible & selected lines
+        lines = list(self.ax.lines)
+        updated = plotting.autoscale_y_from_selected(lines, margin_pct=0.05)
+        if not updated:
+            # Fallback: at least refresh
+            self.canvas.draw_idle()
     def plot(self, files: List[LoadedFile], display_key: str, show_left: bool, show_right: bool,
              filter_kinetic: bool, filter_kinematic: bool, current_mode: str):
         self.clear(); self.current_display_key = display_key; line_map: Dict[Any, SelectionItem] = {}
@@ -520,7 +592,10 @@ class MainWindow(QtWidgets.QMainWindow):
         for chk in (self.chk_left,self.chk_right,self.chk_kinetic,self.chk_kinematic):
             chk.toggled.connect(lambda _=None: self.redraw_all(autoscale=True))
         self.lbl_mode = QtWidgets.QLabel("Mode: SELECT")
-        self.btn_autoscale = QtWidgets.QPushButton("↕︎ Autoscale Y (all)"); self.btn_autoscale.clicked.connect(lambda: self.autoscale_all())
+        self.lbl_mode.setToolTip("Mode Select (s) or Deselect (d)")
+        self.btn_autoscale = QtWidgets.QPushButton("↔︎↕︎ Autoscale")
+        self.btn_autoscale.clicked.connect(lambda: self.autoscale_all())
+        self.btn_autoscale.setToolTip("Autoscale X & Y (Ctrl+U)")
         tb = QtWidgets.QToolBar()
         tb.addWidget(QtWidgets.QLabel("Root:")); tb.addWidget(self.root_edit); tb.addWidget(self.btn_root)
         tb.addSeparator(); tb.addWidget(QtWidgets.QLabel("PID:")); tb.addWidget(self.cmb_pid)
@@ -532,21 +607,46 @@ class MainWindow(QtWidgets.QMainWindow):
         self.key_templates: Dict[str, KeyTemplate] = {}; self.display_keys: List[str] = []
         coord_map1 = [0]*6 + [1]*6 + [2]*6; coord_map2 = [None]*(3*6)
         self.tabs = QtWidgets.QTabWidget()
-        self.page1 = PlotPage(self, 3, 6, coord_map1, key_resolver=self.to_actual_key)
-        self.page2 = PlotPage(self, 3, 6, coord_map2, key_resolver=self.to_actual_key)
-        self.tabs.addTab(self.page1, "Page 1"); self.tabs.addTab(self.page2, "Page 2"); self.setCentralWidget(self.tabs)
-        self.page1.keyChanged.connect(lambda: self.redraw_all(autoscale=True))
-        self.page2.keyChanged.connect(lambda: self.redraw_all(autoscale=True))
+        self.pages: List[Tuple["PlotPage", "PageSpec"]] = []
+        specs = _load_page_specs_from_json()
+        if not specs:
+            specs = [
+                PageSpec(
+                    name="Page 1",
+                    rows=3, cols=6,
+                    coord_map=[0]*6 + [1]*6 + [2]*6,
+                    defaults=["HipAngles","KneeAngles","AnkleAngles","HipMoment","KneeMoment","AnkleMoment"]*3,
+                    xlabel="% cycle",
+                ),
+                PageSpec(
+                    name="Page 2",
+                    rows=3, cols=6,
+                    coord_map=[None]*(3*6),
+                    defaults=[
+                        "Force_Fx*","hip_on_femur_in_femur_fx","med_cond_weld_on_tibial_plat_in_tibial_plat_fx","ankle_on_talus_in_talus_fx","IK_markerErr.total_squared_error","SO_forces.FX",
+                        "Force_Fy*","hip_on_femur_in_femur_fy","med_cond_weld_on_tibial_plat_in_tibial_plat_fy","ankle_on_talus_in_talus_fy","IK_markerErr.marker_error_RMS","SO_forces.FY",
+                        "Force_Fz*","hip_on_femur_in_femur_fz","med_cond_weld_on_tibial_plat_in_tibial_plat_fz","ankle_on_talus_in_talus_fz","IK_markerErr.marker_error_max","SO_forces.FZ",
+                    ],
+                    xlabel="% cycle",
+                ),
+            ]
+        for spec in specs:
+            page = PlotPage(self, spec.rows, spec.cols, spec.coord_map, key_resolver=self.to_actual_key)
+            self.pages.append((page, spec))
+            self.tabs.addTab(page, spec.name)
+        self.setCentralWidget(self.tabs)
+        for page, _ in self.pages:
+            page.keyChanged.connect(lambda: self.redraw_all(autoscale=True))
         self.status_widget = StatusWidget(self); self.setStatusBar(self.status_widget)
         self.participants: List[str] = []; self.trial_types_by_pid: Dict[str, List[str]] = {}; self.files_by_pid_type: Dict[str, Dict[str, List[FileMeta]]] = {}; self.loaded: List[LoadedFile] = []
         QtGui.QShortcut(QtGui.QKeySequence("S"), self, activated=lambda: self.set_mode("select"))
         QtGui.QShortcut(QtGui.QKeySequence("D"), self, activated=lambda: self.set_mode("deselect"))
         QtGui.QShortcut(QtGui.QKeySequence("Ctrl+U"), self, activated=self.autoscale_all)
         self.current_mode = "select"
-        self.page1.selectionApplied.connect(self.apply_selection); self.page2.selectionApplied.connect(self.apply_selection)
+        for page, _ in self.pages:
+            page.selectionApplied.connect(self.apply_selection)
         env_root = os.getenv("CYCLE_TOOL_ROOT")
         if env_root and os.path.isdir(env_root): self.root_edit.setText(env_root); self.set_root(env_root)
-        self.default_displays_page1 = self._default_displays_page1(); self.default_displays_page2 = self._default_displays_page2()
         # --- Saving / audit state ---
         self._username: str = ""
         self._baseline: dict[tuple, int] = {}   # (file_idx, side, cycle_name) -> manually_selected (0/1)
@@ -586,7 +686,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def set_mode(self, mode: str):
         self.current_mode = "select" if mode=="select" else "deselect"; self.lbl_mode.setText(f"Mode: {self.current_mode.upper()}")
-        for page in (self.page1,self.page2):
+        for page, _ in self.pages:
             for cell in page.cells:
                 if cell.selector: cell.selector.set_mode(self.current_mode)
         fm = self.loaded[0].meta if self.loaded else None
@@ -673,8 +773,8 @@ class MainWindow(QtWidgets.QMainWindow):
         templates = discover_key_templates(self.loaded)
         self.key_templates = templates
         self.display_keys = sorted(templates.keys())
-        self.page1.set_options_all(self.display_keys, self.default_displays_page1)
-        self.page2.set_options_all(self.display_keys, self.default_displays_page2)
+        for page, spec in self.pages:
+            page.set_options_all(self.display_keys, spec.defaults)
         self._refresh_counts()
         self.redraw_all(autoscale=True)
 
@@ -709,12 +809,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def redraw_all(self, autoscale: bool = False):
         show_left = self.chk_left.isChecked(); show_right = self.chk_right.isChecked()
         filter_kinetic = self.chk_kinetic.isChecked(); filter_kinematic = self.chk_kinematic.isChecked()
-        self.page1.redraw(self.loaded, show_left, show_right, filter_kinetic, filter_kinematic, self.current_mode)
-        self.page2.redraw(self.loaded, show_left, show_right, filter_kinetic, filter_kinematic, self.current_mode)
+        for page, _ in self.pages:
+            page.redraw(self.loaded, show_left, show_right, filter_kinetic, filter_kinematic, self.current_mode)
         if autoscale: self.autoscale_all()
     def autoscale_all(self):
-        for page in (self.page1,self.page2):
-            for cell in page.cells: cell.autoscale()
+        for page, _ in self.pages:
+            for cell in page.cells:
+                cell.autoscale()
     @QtCore.Slot(list)
     def apply_selection(self, changes: List[tuple]):
         """

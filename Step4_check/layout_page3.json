@@ -1,0 +1,62 @@
+	{
+  "name": "Page 3 — Pelvis, Trunk Ang; sEMG",
+  "rows": 3,
+  "cols": 6,
+  "x_axis_label": "% cycle",
+  "cells": [
+    {
+      "title": "Pelvis Angles",
+      "default_by_row": [
+        "PelvisAngles",
+        "PelvisAngles",
+        "PelvisAngles"
+      ],
+      "kind": "angles"
+    },
+    {
+      "title": "Thorax Angles (x,y) + Gastro med (R)",
+      "default_by_row": [
+        "ThoraxAngles",
+        "ThoraxAngles",
+        "EMG_*_M_erector_spine"
+      ],
+      "kind": "angles+emg"
+    },
+    {
+      "title": "EMG group A",
+      "default_by_row": [
+        "EMG_*_M_semitendinosus",
+        "EMG_*_M_peroneus_long",
+        "EMG_*_M_tibialis_anterior"
+      ],
+      "kind": "emg"
+    },
+    {
+      "title": "EMG group B",
+      "default_by_row": [
+        "EMG_*_M_biceps_femoris",
+        "EMG_*_M_rectus_fem",
+        "EMG_*_M_soleus"
+      ],
+      "kind": "emg"
+    },
+    {
+      "title": "EMG group C",
+      "default_by_row": [
+        "EMG_*_M_gluteus_maximus",
+        "EMG_*_M_vastus_med",
+        "EMG_*_M_gastroc_med"
+      ],
+      "kind": "emg"
+    },
+    {
+      "title": "EMG group D",
+      "default_by_row": [
+        "EMG_*_M_gluteus_medius",
+        "EMG_*_M_vastus_lat",
+        "EMG_*_M_gastro_lat"
+      ],
+      "kind": "emg"
+    }
+  ]
+}

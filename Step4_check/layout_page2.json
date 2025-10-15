@@ -1,161 +1,92 @@
 {
-  "name": "Page 2: GRF, JRF, IK Errors, SO Residuals",
+  "name": "Page 2 — Kinetics & Quality",
   "rows": 3,
   "cols": 6,
   "x_axis_label": "% cycle",
   "cells": [
     {
-      "title": "GRF Fx*",
+      "title": "GRF (all plates)",
       "options": [
-        "Force_Fx*"
-      ],
-      "default": "Force_Fx*",
-      "kind": "analog_many"
-    },
-    {
-      "title": "GRF Fy*",
-      "options": [
-        "Force_Fy*"
-      ],
-      "default": "Force_Fy*",
-      "kind": "analog_many"
-    },
-    {
-      "title": "GRF Fz*",
-      "options": [
+        "Force_Fx*",
+        "Force_Fy*",
         "Force_Fz*"
       ],
-      "default": "Force_Fz*",
-      "kind": "analog_many"
-    },
-    {
-      "title": "Hip JRF fx",
-      "options": [
-        "hip_r_on_femur_r_in_femur_r_fx",
-        "hip_l_on_femur_l_in_femur_l_fx"
+      "default_by_row": [
+        "Force_Fx*",
+        "Force_Fy*",
+        "Force_Fz*"
       ],
-      "default": "hip_r_on_femur_r_in_femur_r_fx",
-      "kind": "jrl_1d"
+      "kind": "grf_multi"
     },
     {
-      "title": "Hip JRF fy",
+      "title": "Hip JRF",
       "options": [
-        "hip_r_on_femur_r_in_femur_r_fy",
-        "hip_l_on_femur_l_in_femur_l_fy"
+        "hip_on_femur_in_femur_fx",
+        "hip_on_femur_in_femur_fy",
+        "hip_on_femur_in_femur_fz"
       ],
-      "default": "hip_r_on_femur_r_in_femur_r_fy",
-      "kind": "jrl_1d"
-    },
-    {
-      "title": "Hip JRF fz",
-      "options": [
-        "hip_r_on_femur_r_in_femur_r_fz",
-        "hip_l_on_femur_l_in_femur_l_fz"
+      "default_by_row": [
+        "hip_on_femur_in_femur_fx",
+        "hip_on_femur_in_femur_fy",
+        "hip_on_femur_in_femur_fz"
       ],
-      "default": "hip_r_on_femur_r_in_femur_r_fz",
-      "kind": "jrl_1d"
+      "kind": "jrf"
     },
     {
-      "title": "Knee JRF fx",
+      "title": "Knee JRF",
       "options": [
-        "med_cond_weld_r_on_tibial_plat_r_in_tibial_plat_r_fx",
-        "med_cond_weld_l_on_tibial_plat_l_in_tibial_plat_l_fx"
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fx",
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fy",
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fz"
       ],
-      "default": "med_cond_weld_r_on_tibial_plat_r_in_tibial_plat_r_fx",
-      "kind": "jrl_1d"
-    },
-    {
-      "title": "Knee JRF fy",
-      "options": [
-        "med_cond_weld_r_on_tibial_plat_r_in_tibial_plat_r_fy",
-        "med_cond_weld_l_on_tibial_plat_l_in_tibial_plat_l_fy"
+      "default_by_row": [
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fx",
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fy",
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fz"
       ],
-      "default": "med_cond_weld_r_on_tibial_plat_r_in_tibial_plat_r_fy",
-      "kind": "jrl_1d"
+      "kind": "jrf"
     },
     {
-      "title": "Knee JRF fz",
+      "title": "Ankle JRF",
       "options": [
-        "med_cond_weld_r_on_tibial_plat_r_in_tibial_plat_r_fz",
-        "med_cond_weld_l_on_tibial_plat_l_in_tibial_plat_l_fz"
+        "ankle_on_talus_in_talus_fx",
+        "ankle_on_talus_in_talus_fy",
+        "ankle_on_talus_in_talus_fz"
       ],
-      "default": "med_cond_weld_r_on_tibial_plat_r_in_tibial_plat_r_fz",
-      "kind": "jrl_1d"
-    },
-    {
-      "title": "Ankle JRF fx",
-      "options": [
-        "ankle_r_on_talus_r_in_talus_r_fx",
-        "ankle_l_on_talus_l_in_talus_l_fx"
+      "default_by_row": [
+        "ankle_on_talus_in_talus_fx",
+        "ankle_on_talus_in_talus_fy",
+        "ankle_on_talus_in_talus_fz"
       ],
-      "default": "ankle_r_on_talus_r_in_talus_r_fx",
-      "kind": "jrl_1d"
+      "kind": "jrf"
     },
     {
-      "title": "Ankle JRF fy",
+      "title": "IK errors",
       "options": [
-        "ankle_r_on_talus_r_in_talus_r_fy",
-        "ankle_l_on_talus_l_in_talus_l_fy"
-      ],
-      "default": "ankle_r_on_talus_r_in_talus_r_fy",
-      "kind": "jrl_1d"
-    },
-    {
-      "title": "Ankle JRF fz",
-      "options": [
-        "ankle_r_on_talus_r_in_talus_r_fz",
-        "ankle_l_on_talus_l_in_talus_l_fz"
-      ],
-      "default": "ankle_r_on_talus_r_in_talus_r_fz",
-      "kind": "jrl_1d"
-    },
-    {
-      "title": "IK total_squared_error",
-      "options": [
-        "IK_markerErr.total_squared_error"
-      ],
-      "default": "IK_markerErr.total_squared_error",
-      "kind": "ik_err"
-    },
-    {
-      "title": "IK marker_error_RMS",
-      "options": [
-        "IK_markerErr.marker_error_RMS"
-      ],
-      "default": "IK_markerErr.marker_error_RMS",
-      "kind": "ik_err"
-    },
-    {
-      "title": "IK marker_error_max",
-      "options": [
+        "IK_markerErr.total_squared_error",
+        "IK_markerErr.marker_error_RMS",
         "IK_markerErr.marker_error_max"
       ],
-      "default": "IK_markerErr.marker_error_max",
+      "default_by_row": [
+        "IK_markerErr.total_squared_error",
+        "IK_markerErr.marker_error_RMS",
+        "IK_markerErr.marker_error_max"
+      ],
       "kind": "ik_err"
     },
     {
-      "title": "SO residual FX",
+      "title": "SO residuals (Forces)",
       "options": [
-        "SO_forces.FX"
-      ],
-      "default": "SO_forces.FX",
-      "kind": "so_1d"
-    },
-    {
-      "title": "SO residual FY",
-      "options": [
-        "SO_forces.FY"
-      ],
-      "default": "SO_forces.FY",
-      "kind": "so_1d"
-    },
-    {
-      "title": "SO residual FZ",
-      "options": [
+        "SO_forces.FX",
+        "SO_forces.FY",
         "SO_forces.FZ"
       ],
-      "default": "SO_forces.FZ",
-      "kind": "so_1d"
+      "default_by_row": [
+        "SO_forces.FX",
+        "SO_forces.FY",
+        "SO_forces.FZ"
+      ],
+      "kind": "so_forces"
     }
   ]
 }

@@ -9,8 +9,7 @@ Key features implemented:
 - Supports 1-D arrays and (N,3) arrays (draws one line per coordinate).
 - Efficient redraw via Line2D.set_data(...) and draw_idle().
 - Hover tooltips on motion_notify_event using Qt QToolTip.
-- autoscale_y_from_selected(...) utility to set y-limits from currently visible,
-  manually_selected==1 lines (aggregating across all coords) and applying a margin.
+- autoscale_y_from_selected(...) utility to set X **and** Y limits from currently visible, manually_selected==1 lines (aggregating across all coords) and applying a margin.
 
 This module intentionally does not import matplotlib.pyplot.
 
@@ -385,7 +384,7 @@ def autoscale_y_from_selected(
     margin_pct: float = 0.05,
 ) -> bool:
     """
-    Compute y-limits across currently visible & manually_selected==1 lines
+    Compute X and Y limits across currently visible & manually_selected==1 lines
     (aggregating all coords) and apply them to that subplot's Axes with a margin.
 
     Returns True if limits were updated, False if no finite data was found.
@@ -395,8 +394,8 @@ def autoscale_y_from_selected(
     if not lines:
         return False
 
-    # Filter: visible + selected
-    vals: List[np.ndarray] = []
+    xs: List[np.ndarray] = []
+    ys: List[np.ndarray] = []
     ax: Optional[Axes] = None
 
     for ln in lines:
@@ -405,32 +404,50 @@ def autoscale_y_from_selected(
         if not ln.get_visible():
             continue
         meta = getattr(ln, "_meta", {}) or {}
-        if int(meta.get("manually_selected", 1)) != 1:
+        try:
+            if int(meta.get("manually_selected", 1)) != 1:
+                continue
+        except Exception:
             continue
+
+        x = np.asarray(ln.get_xdata())
         y = np.asarray(ln.get_ydata())
-        if y.size == 0 or not np.isfinite(y).any():
+        if x.size == 0 or y.size == 0:
             continue
-        vals.append(y[np.isfinite(y)])
+        mask = np.isfinite(x) & np.isfinite(y)
+        if not np.any(mask):
+            continue
+
+        xs.append(x[mask])
+        ys.append(y[mask])
         if ax is None:
             ax = ln.axes
 
-    if not vals or ax is None:
+    if not xs or not ys or ax is None:
         return False
 
-    y_all = np.concatenate(vals) if len(vals) > 1 else vals[0]
-    y_min = float(np.min(y_all))
-    y_max = float(np.max(y_all))
+    x_all = np.concatenate(xs) if len(xs) > 1 else xs[0]
+    y_all = np.concatenate(ys) if len(ys) > 1 else ys[0]
+    x_min, x_max = float(np.min(x_all)), float(np.max(x_all))
+    y_min, y_max = float(np.min(y_all)), float(np.max(y_all))
 
-    if not np.isfinite([y_min, y_max]).all() or y_min == y_max:
-        # If identical or non-finite, avoid changing limits
+    if not np.isfinite([x_min, x_max, y_min, y_max]).all():
         return False
 
-    # Apply margin
-    span = y_max - y_min
+    # Fallback spans (avoid zero-width)
+    dx = x_max - x_min
+    dy = y_max - y_min
+    if dx <= 0:
+        dx = 1.0
+        x_min, x_max = x_min - 0.5*dx, x_min + 0.5*dx
+    if dy <= 0:
+        dy = 1.0
+        y_min, y_max = y_min - 0.5*dy, y_min + 0.5*dy
+
     m = float(margin_pct) if margin_pct is not None else 0.0
     m = max(0.0, m)
-    pad = span * m
-    ax.set_ylim(y_min - pad, y_max + pad)
+    ax.set_xlim(x_min - dx*m, x_max + dx*m)
+    ax.set_ylim(y_min - dy*m, y_max + dy*m)
 
     canvas = ax.figure.canvas if ax and ax.figure else None
     if canvas is not None:
