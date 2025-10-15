@@ -458,13 +458,16 @@ class PlotCell(QtWidgets.QWidget):
             # Fallback: at least refresh
             self.canvas.draw_idle()
     def plot(self, files: List[LoadedFile], display_key: str, show_left: bool, show_right: bool,
-             filter_kinetic: bool, filter_kinematic: bool, current_mode: str):
+             filter_kinetic: bool, filter_kinematic: bool, current_mode: str,
+             hide_deselected: bool = False):
         self.clear(); self.current_display_key = display_key; line_map: Dict[Any, SelectionItem] = {}
         def style_line(ln, stride_side: str, cdict: Dict[str, Any]):
             ln.set_color(LEFT_COLOR if stride_side=="left_stride" else RIGHT_COLOR)
             ms = int(cdict.get("manually_selected",1)); ln._meta = {"manually_selected": ms}
             if ms==0: ln.set_alpha(0.2)
             if _is_qc_bad(cdict): ln.set_linestyle("--")
+            # NEW: hide de-selected lines completely when toggle is on
+            ln.set_visible(False if (hide_deselected and int(ln._meta.get("manually_selected", 1)) == 0) else True)
         for fi, lf in enumerate(files):
             dfile = lf.data
             for stride_side in ("left_stride","right_stride"):
@@ -559,11 +562,12 @@ class PlotPage(QtWidgets.QWidget):
             default = defaults[i] if i < len(defaults) and defaults[i] in displays else (displays[0] if displays else None)
             cell.set_options(displays, default_display=default)
     def redraw(self, files: List[LoadedFile], show_left: bool, show_right: bool,
-               filter_kinetic: bool, filter_kinematic: bool, current_mode: str) -> None:
+               filter_kinetic: bool, filter_kinematic: bool, current_mode: str,
+               hide_deselected: bool = False) -> None:
         for cell in self.cells:
             disp = cell.current_display_key or (cell.combo.currentText().strip() if cell.combo.count() else "")
             if not disp and cell.combo.count(): disp = cell.combo.itemText(0)
-            if disp: cell.plot(files, disp, show_left, show_right, filter_kinetic, filter_kinematic, current_mode)
+            if disp: cell.plot(files, disp, show_left, show_right, filter_kinetic, filter_kinematic, current_mode, hide_deselected)
     @QtCore.Slot()
     def _on_key_changed(self):
         print("[page] key changed; requesting window redraw+autoscale")
@@ -592,17 +596,27 @@ class MainWindow(QtWidgets.QMainWindow):
         for chk in (self.chk_left,self.chk_right,self.chk_kinetic,self.chk_kinematic):
             chk.toggled.connect(lambda _=None: self.redraw_all(autoscale=True))
         self.lbl_mode = QtWidgets.QLabel("Mode: SELECT")
-        self.lbl_mode.setToolTip("Mode Select (s) or Deselect (d)")
+        self.lbl_mode.setToolTip("Mode Select (S) or Deselect (D)")
         self.btn_autoscale = QtWidgets.QPushButton("↔︎↕︎ Autoscale")
         self.btn_autoscale.clicked.connect(lambda: self.autoscale_all())
         self.btn_autoscale.setToolTip("Autoscale X & Y (Ctrl+U)")
+        self.act_hide_deselected = QtGui.QAction("Hide Deselected", self)
+        self.act_hide_deselected.setCheckable(True)
+        self.act_hide_deselected.setShortcut(QtGui.QKeySequence("Ctrl+H"))
+        self.act_hide_deselected.setShortcutContext(Qt.ApplicationShortcut)
+        self.act_hide_deselected.setToolTip("Hide deselected (Ctrl+H)")
+        # On toggle, replot (and autoscale to currently visible lines)
+        self.act_hide_deselected.toggled.connect(lambda _: self.redraw_all(autoscale=True))
+        self.addAction(self.act_hide_deselected)  # ensure shortcut works app-wide
         tb = QtWidgets.QToolBar()
         tb.addWidget(QtWidgets.QLabel("Root:")); tb.addWidget(self.root_edit); tb.addWidget(self.btn_root)
         tb.addSeparator(); tb.addWidget(QtWidgets.QLabel("PID:")); tb.addWidget(self.cmb_pid)
         tb.addWidget(QtWidgets.QLabel("Trial:")); tb.addWidget(self.cmb_trial)
         tb.addSeparator(); tb.addWidget(self.chk_left); tb.addWidget(self.chk_right)
         tb.addSeparator(); tb.addWidget(self.chk_kinetic); tb.addWidget(self.chk_kinematic)
-        tb.addSeparator(); tb.addWidget(self.lbl_mode); tb.addSeparator(); tb.addWidget(self.btn_autoscale)
+        tb.addSeparator(); tb.addWidget(self.lbl_mode)
+        tb.addSeparator(); tb.addAction(self.act_hide_deselected)
+        tb.addSeparator(); tb.addWidget(self.btn_autoscale)
         self.addToolBar(Qt.TopToolBarArea, tb)
         self.key_templates: Dict[str, KeyTemplate] = {}; self.display_keys: List[str] = []
         coord_map1 = [0]*6 + [1]*6 + [2]*6; coord_map2 = [None]*(3*6)
@@ -809,8 +823,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def redraw_all(self, autoscale: bool = False):
         show_left = self.chk_left.isChecked(); show_right = self.chk_right.isChecked()
         filter_kinetic = self.chk_kinetic.isChecked(); filter_kinematic = self.chk_kinematic.isChecked()
+        hide_deselected = bool(getattr(self, "act_hide_deselected", None) and self.act_hide_deselected.isChecked())
         for page, _ in self.pages:
-            page.redraw(self.loaded, show_left, show_right, filter_kinetic, filter_kinematic, self.current_mode)
+            page.redraw(self.loaded, show_left, show_right, filter_kinetic, filter_kinematic, self.current_mode, hide_deselected)
         if autoscale: self.autoscale_all()
     def autoscale_all(self):
         for page, _ in self.pages:
