@@ -622,8 +622,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.chk_kinematic = QtWidgets.QCheckBox("show kinematic cycles"); self.chk_kinematic.setChecked(False)
         for chk in (self.chk_left,self.chk_right,self.chk_kinetic,self.chk_kinematic):
             chk.toggled.connect(lambda _=None: self.redraw_all(autoscale=True))
-        self.lbl_mode = QtWidgets.QLabel("Mode: SELECT")
-        self.lbl_mode.setToolTip("Mode Select (S) or Deselect (D)")
+        self.btn_mode = QtWidgets.QPushButton("Mode: SELECT")
+        self.btn_mode.setCheckable(True)          # unchecked = SELECT, checked = DESELECT
+        self.btn_mode.setChecked(False)
+        self.btn_mode.setToolTip("Toggle Select (S) / Deselect (D)")
+        # clicking the button toggles mode
+        self.btn_mode.toggled.connect(lambda checked: self.set_mode("deselect" if checked else "select"))
         self.btn_autoscale = QtWidgets.QPushButton("↔︎↕︎ Autoscale")
         self.btn_autoscale.clicked.connect(lambda: self.autoscale_all())
         self.btn_autoscale.setToolTip("Autoscale X & Y (Ctrl+U)")
@@ -641,7 +645,7 @@ class MainWindow(QtWidgets.QMainWindow):
         tb.addWidget(QtWidgets.QLabel("Trial:")); tb.addWidget(self.cmb_trial)
         tb.addSeparator(); tb.addWidget(self.chk_left); tb.addWidget(self.chk_right)
         tb.addSeparator(); tb.addWidget(self.chk_kinetic); tb.addWidget(self.chk_kinematic)
-        tb.addSeparator(); tb.addWidget(self.lbl_mode)
+        tb.addSeparator(); tb.addWidget(self.btn_mode)
         tb.addSeparator(); tb.addAction(self.act_hide_deselected)
         tb.addSeparator(); tb.addWidget(self.btn_autoscale)
         self.addToolBar(Qt.TopToolBarArea, tb)
@@ -764,7 +768,14 @@ class MainWindow(QtWidgets.QMainWindow):
                     cyc.setdefault("SO_M_RMS_ok", True)
                     cyc.setdefault("SO_M_MAX_ok", True)
     def set_mode(self, mode: str):
-        self.current_mode = "select" if mode=="select" else "deselect"; self.lbl_mode.setText(f"Mode: {self.current_mode.upper()}")
+        self.current_mode = "select" if mode == "select" else "deselect"
+        # --- insert below line above ---
+        # Keep the toggle button in sync without re-triggering set_mode
+        if hasattr(self, "btn_mode"):
+            self.btn_mode.blockSignals(True)
+            self.btn_mode.setChecked(self.current_mode == "deselect")
+            self.btn_mode.setText(f"Mode: {self.current_mode.upper()}")
+            self.btn_mode.blockSignals(False)
         for page, _ in self.pages:
             for cell in page.cells:
                 if cell.selector: cell.selector.set_mode(self.current_mode)
@@ -802,7 +813,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._navigating_programmatic = False
                 return
         self._last_pid = pid  # remember for potential revert next time
-
+        self._rescan_file_index()
         types = self.trial_types_by_pid.get(pid, [])
         #print(f"[pid] {pid} types={types}")
         self.cmb_trial.blockSignals(True)
@@ -830,7 +841,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._navigating_programmatic = False
                 return
         self._last_trial = trial  # remember for potential revert next time
-
+        self._rescan_file_index()
         pid = self.cmb_pid.currentText().strip()
         metas = self.files_by_pid_type.get(pid, {}).get(trial, [])
         #print(f"[trial] {pid}/{trial}: files={len(metas)}")
@@ -886,6 +897,48 @@ class MainWindow(QtWidgets.QMainWindow):
                 for cyc, cdict in block.items():
                     items.append({"manually_selected": int(cdict.get("manually_selected",1)), "kinetic": 1 if is_kinetic(cdict) else 0})
         totals = compute_counts(items); self.status_widget.update_from_counts(totals)
+    def _rescan_file_index(self) -> None:
+        """Re-scan root to pick up newly created *_check.mat files and update indices."""
+        root = self.root_edit.text().strip()
+        if not root or not os.path.isdir(root):
+            return
+        files = scan_root(root)
+        self.participants, self.trial_types_by_pid, self.files_by_pid_type = build_indices(files)
+    def _refresh_indices_keep_selection(self) -> None:
+        """Re-scan and refresh PID/trial menus while preserving current selections."""
+        root = self.root_edit.text().strip()
+        if not root or not os.path.isdir(root):
+            return
+        cur_pid = self.cmb_pid.currentText().strip()
+        cur_trial = self.cmb_trial.currentText().strip()
+
+        files = scan_root(root)
+        participants, trial_types_by_pid, files_by_pid_type = build_indices(files)
+
+        self._navigating_programmatic = True
+        # Update internal maps
+        self.participants = participants
+        self.trial_types_by_pid = trial_types_by_pid
+        self.files_by_pid_type = files_by_pid_type
+
+        # Rebuild PID combo
+        self.cmb_pid.blockSignals(True)
+        self.cmb_pid.clear()
+        self.cmb_pid.addItems(self.participants)
+        if cur_pid in self.participants:
+            self.cmb_pid.setCurrentText(cur_pid)
+        self.cmb_pid.blockSignals(False)
+
+        # Rebuild trial combo for that PID
+        self.cmb_trial.blockSignals(True)
+        self.cmb_trial.clear()
+        trials = self.trial_types_by_pid.get(cur_pid, [])
+        self.cmb_trial.addItems(trials)
+        if cur_trial in trials:
+            self.cmb_trial.setCurrentText(cur_trial)
+        self.cmb_trial.blockSignals(False)
+
+        self._navigating_programmatic = False
     def redraw_all(self, autoscale: bool = False):
         show_left = self.chk_left.isChecked(); show_right = self.chk_right.isChecked()
         filter_kinetic = self.chk_kinetic.isChecked(); filter_kinematic = self.chk_kinematic.isChecked()
@@ -1102,7 +1155,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # New baseline after successful save
         self._rebuild_baseline()
-
+        self._refresh_indices_keep_selection()
         # Inform user
         if saved_paths:
             msg = "\n".join(os.path.basename(p) for p in saved_paths)
@@ -1143,48 +1196,6 @@ class MainWindow(QtWidgets.QMainWindow):
         s = "left" if "left" in side.lower() or side.lower()=="l" else "right"
         return f"{s}::{name}"
 
-
-    #def _apply_selection(self, cycle_id: str, val: int) -> None:
-    #    # update model
-    #    cyc = self._cycles_by_id[cycle_id]              # your own mapping: id -> cycle dict
-    #    cyc["manually_selected"] = int(val)
-
-        # update any cached store so redo/undo stays consistent
-    #    self._selection_store[cycle_id] = int(val)
-
-        # refresh visuals for lines that belong to this cycle (restyle alpha/dashes)
-    #    self._restyle_lines_for_cycle(cycle_id)
-
-        # refresh counts/status bar
-        #self._update_status_counts()
-    # during plot construction, when you create SelectionManager per-axes:
-    #def _on_rect_result(items, mode, bbox):
-    #    new_val = 1 if mode == "select" else 0
-    #    changes = []
-    #    for it in items:                      # it: SelectionItem(cycle_ref=..., param=...)
-    #        side = it.cycle_ref.side         # or however you track side on your ref
-    #        name = it.cycle_ref.cycle        # the cycle name/number
-    #        cid = self._cycle_id(side, name)
-    #        old = int(self._cycles_by_id[cid].get("manually_selected", 1))
-    #        if old != new_val:
-    #            changes.append((cid, old, new_val))
-
-    #    if not changes:
-    #        return
-
-    #    cmd = SelectionEdit(
-    #        store=self._selection_store,
-    #        changes=changes,
-    #        description="Rectangle select",
-    #        on_apply=lambda k, v: self._apply_selection(k, v),
-    #    )
-    #    self.history.push(cmd)        # applies .do() and truncates redo branch
-    #    self._update_undo_redo_enabled()
-    #def _update_status_counts(self):
-    #    # recompute using your Status helpers across all visible cycles
-    #    counts = compute_counts(self._iter_all_cycles())  # or your current source of cycles
-    #    self.status_widget.update_counts(counts)          # if you added such method
-    #    # or just update labels directly
     @QtCore.Slot()
     def _on_undo(self):
         print("[undo] triggered")
