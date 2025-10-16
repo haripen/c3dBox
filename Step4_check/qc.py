@@ -1,50 +1,53 @@
-"""Quality control helpers for IK and SO results.
+"""Quality control helpers for IK and SO results (GRF/BW/ABS configurable; FY-only decision).
 
 This module evaluates per-cycle OpenSim outputs for inverse kinematics (IK)
-marker errors and static optimization (SO) residuals. It adds boolean flags
-onto each cycle dict, treating missing data as *pass* (True).
+marker errors and static optimization (SO) residuals.
 
-Flags added when the respective data exist (and True if data missing):
-- "IK_RMS_ok":     max_t(marker_error_RMS) <= settings.ik.marker_error_RMS_max
-- "IK_MAX_ok":     max_t(marker_error_max) <= settings.ik.marker_error_max_max
-- "SO_F_RMS_ok":   RMS(FX,FY,FZ in SLS window) <= settings.so.force_rms_max
-- "SO_F_MAX_ok":   MAX(|FX|,|FY|,|FZ| in SLS window) <= settings.so.force_max_max
-- "SO_M_RMS_ok":   RMS(MX,MY,MZ in SLS window) <= settings.so.moment_rms_max
-- "SO_M_MAX_ok":   MAX(|MX|,|MY|,|MZ| in SLS window) <= settings.so.moment_max_max
+SO force thresholds (choose EXACTLY ONE per metric in settings.json → section "so"):
+  RMS metric (applies to each component FX/FY/FZ; mapping SO↔FP below):
+    - absolute N:      "force_rms_max": <float N>
+    - % of GRF RMS:    "force_rms_max_pcGRF": <float %>   (uses per-component FP RMS in SLS)
+    - % of BW in N:    "force_rms_max_pcBW": <float %>    (BW = meta.PROCESSING.Bodymass * 9.81 N)
+  MAX metric:
+    - absolute N:      "force_max_max": <float N>
+    - % of GRF MAX:    "force_max_max_pcGRF": <float %>   (uses per-component FP MAX in SLS)
+    - % of BW in N:    "force_max_max_pcBW": <float %>
 
-SLS window = contralateral Foot_Off → contralateral Foot_Strike mapped to
-SO_forces["time"]. We skip n_skip frames at both window ends where:
-- Primary: n_skip = int(points_fs / so_frames_tol) when "so_frames_tol" is present.
-- Alias:   n_skip = int(points_fs * (so_ms_tol / 1000.0)) when "so_ms_tol" (milliseconds) is present.
-points_fs = meta['header']['points']['frame_rate'].
+Mapping for reference components (absolute values used throughout):
+  SO.FX ↔ FP.Y   (Force_Fy#),   SO.FY ↔ FP.Z (Force_Fz#),   SO.FZ ↔ FP.X (Force_Fx#)
 
-If any required arrays are missing or empty, the corresponding flag is set to True
-("pass") rather than failing the cycle.
+SLS window = contralateral Foot_Off → contralateral Foot_Strike mapped to SO_forces['time'].
+Trim both ends by "so.so_ms_tol" milliseconds (required) on the SO timeline.
+Forceplate streams are windowed by mapping the trimmed SO index window to analog indices
+via linear fraction of the cycle (works with/without analog time vector).
 
-Usage:
-    from .qc import qc_cycle, qc_all
+IMPORTANT (temporary): Although thresholds are computed for FX/FY/FZ, the final decision
+for forces is intentionally evaluated **only for FY** (vs FP.Z) for now, so it’s easy to
+switch back to all components later.
 
+This module is strict: it raises clear errors if required settings/data are missing.
+Use the literal DEBUG_REPORT_ALWAYS toggle inside eval_so_flags() to print the report at
+every call; otherwise it prints only for the first evaluated cycle.
 """
 from __future__ import annotations
-from typing import Any, Dict, Optional, Tuple
+
+from typing import Any, Dict, Optional, Tuple, List
+import re
 import json
 from pathlib import Path
 import numpy as np
 
-# Try to use central settings manager for IK (kept), but SO loads JSON directly per user request.
 try:
-    # settings.get(key_path, default=None)
     from .settings import get as settings_get  # type: ignore
 except Exception:  # pragma: no cover
-    settings_get = None  # Fallback later
+    settings_get = None
 
 
 # ------------------------------
-# Internal helpers
+# Small helpers
 # ------------------------------
 
 def _safe_get(d: Dict[str, Any], *keys: str, default: Any = None) -> Any:
-    """Safely walk nested dicts: _safe_get(d, 'a', 'b', default=...) -> d['a']['b'] or default."""
     cur: Any = d
     for k in keys:
         if not isinstance(cur, dict) or k not in cur:
@@ -72,13 +75,6 @@ def _max_abs(arr: np.ndarray) -> float:
 
 
 def _contralateral_events(side: str) -> Tuple[str, str]:
-    """Return (Foot_Off_key, Foot_Strike_key) to use as contralateral events.
-
-    Parameters
-    ----------
-    side : {'left_stride','right_stride'}
-        The *indexing* side of the cycle dict.
-    """
     if side == 'left_stride':
         return 'Right_Foot_Off', 'Right_Foot_Strike'
     else:
@@ -86,7 +82,6 @@ def _contralateral_events(side: str) -> Tuple[str, str]:
 
 
 def _as_scalar_time(x: Any) -> Optional[float]:
-    """Return a float time from possibly nested 1-element arrays/lists, else None."""
     if x is None:
         return None
     try:
@@ -96,41 +91,31 @@ def _as_scalar_time(x: Any) -> Optional[float]:
             return float(x)  # type: ignore[arg-type]
         except Exception:
             return None
-    if arr.shape == ():              # 0-D numpy
-        return float(arr)  # type: ignore[return-value]
-    if arr.size == 1:                # 1-element list/array/[[...]]
+    if arr.shape == ():
+        return float(arr)
+    if arr.size == 1:
         return float(arr.reshape(-1)[0])
     return None
 
 
-def _window_indices_from_times(
-    t_series: np.ndarray,
-    t0: Optional[float],
-    t1: Optional[float],
-    n_skip: int,
-) -> Optional[Tuple[int, int]]:
-    """Map [t0, t1] to (i0, i1) inclusive indices on t_series and crop by n_skip.
-
-    Returns None if mapping fails or window is invalid after cropping.
-    """
-    if t_series is None or len(t_series) == 0 or t0 is None or t1 is None:
-        return None
+def _window_indices_from_times(t_series: np.ndarray, t0: Optional[float], t1: Optional[float], n_skip: int) -> Tuple[int, int]:
+    if t_series is None or len(t_series) == 0:
+        raise ValueError("SO_forces.time is missing or empty")
+    if t0 is None or t1 is None:
+        raise ValueError("Contralateral Foot_Off/Foot_Strike time is missing")
     if not (np.isfinite(t0) and np.isfinite(t1)):
-        return None
+        raise ValueError("Contralateral event time(s) are not finite")
     if t1 <= t0:
-        return None
+        raise ValueError(f"Invalid SLS window: Foot_Strike ({t1}) <= Foot_Off ({t0})")
 
     ts = np.asarray(t_series, dtype=float)
-    # Find first idx >= t0 and last idx <= t1
     i0 = int(np.searchsorted(ts, t0, side='left'))
     i1 = int(np.searchsorted(ts, t1, side='right')) - 1
 
-    # Bound and crop
     i0 = max(0, i0 + max(0, int(n_skip)))
     i1 = min(len(ts) - 1, i1 - max(0, int(n_skip)))
-
     if i1 < i0:
-        return None
+        raise ValueError(f"SLS window after trimming is empty: indices [{i0}:{i1}]")
     return i0, i1
 
 
@@ -139,32 +124,73 @@ def _window_indices_from_times(
 # ------------------------------
 
 def _load_local_settings() -> Dict[str, Any]:
-    """Load settings.json that sits next to this file (no indirection)."""
     path = Path(__file__).with_name("settings.json").resolve()
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
+    return json.loads(path.read_text(encoding="utf-8"))  # let JSON errors raise
 
 
-def _deep_get(d: Dict[str, Any], dotted: str, default: Any) -> Any:
+def _deep_get(d: Dict[str, Any], dotted: str) -> Any:
     cur: Any = d
     for part in dotted.split("."):
         if not isinstance(cur, dict) or part not in cur:
-            return default
+            raise KeyError(f"Missing settings key: {dotted}")
         cur = cur[part]
     return cur
 
 
-def _get_setting(path: str, default: Any) -> Any:
-    """Robust getter used by IK: use settings.get if available, else load local JSON directly."""
-    if settings_get is not None:
-        try:
-            val = settings_get(path, default)  # type: ignore[misc]
-            return val
-        except Exception:
-            pass
-    return _deep_get(_load_local_settings(), path, default)
+# ------------------------------
+# Forceplate utilities
+# ------------------------------
+
+def _collect_fp_streams(analog: Dict[str, Any]) -> Dict[str, List[np.ndarray]]:
+    """Collect Force_Fx#, Force_Fy#, Force_Fz# arrays (abs) for any number of plates."""
+    if not isinstance(analog, dict):
+        raise ValueError("cycle['analog'] is missing or not a dict")
+    out: Dict[str, List[np.ndarray]] = {'Fx': [], 'Fy': [], 'Fz': []}
+    pat = {
+        'Fx': re.compile(r'^Force_Fx(\d+)$', re.IGNORECASE),
+        'Fy': re.compile(r'^Force_Fy(\d+)$', re.IGNORECASE),
+        'Fz': re.compile(r'^Force_Fz(\d+)$', re.IGNORECASE),
+    }
+    for key, val in analog.items():
+        if not _is_array_like(val):
+            continue
+        for comp, rx in pat.items():
+            if rx.match(key):
+                arr = np.asarray(val, dtype=float)
+                if arr.size == 0:
+                    continue
+                out[comp].append(np.abs(arr))
+                break
+    if not any(out.values()):
+        raise ValueError("No Force_Fx#/Force_Fy#/Force_Fz# channels found in cycle['analog']")
+    return out
+
+
+def _fp_window_stat(arr_list: List[np.ndarray], frac0: float, frac1: float, mode: str) -> float:
+    """Grand statistic across plates in window; mode in {'rms','max'}."""
+    vals: List[float] = []
+    for a in arr_list:
+        L = len(a)
+        if L == 0:
+            continue
+        j0 = int(round(frac0 * (L - 1)))
+        j1 = int(round(frac1 * (L - 1)))
+        j0 = max(0, min(L - 1, j0))
+        j1 = max(0, min(L - 1, j1))
+        if j1 < j0:
+            continue
+        seg = a[j0:j1 + 1]
+        if seg.size == 0:
+            continue
+        if mode == 'rms':
+            vals.append(_rms(seg))
+        elif mode == 'max':
+            vals.append(_max_abs(seg))
+        else:
+            raise ValueError(f"Unknown mode '{mode}' for _fp_window_stat")
+    if not vals:
+        raise ValueError("Unable to compute forceplate window statistic — window outside analog data for all plates")
+    return max(vals)  # grand max across plates
 
 
 # ------------------------------
@@ -172,16 +198,9 @@ def _get_setting(path: str, default: Any) -> Any:
 # ------------------------------
 
 def eval_ik_flags(cycle: Dict[str, Any]) -> Dict[str, bool]:
-    """Evaluate IK marker error flags for a single cycle.
-
-    Returns
-    -------
-    dict
-        {'IK_RMS_ok': bool, 'IK_MAX_ok': bool}
-        Missing data -> both True.
-    """
-    rms_thr = float(_get_setting('ik.marker_error_RMS_max', 0.02))
-    max_thr = float(_get_setting('ik.marker_error_max_max', 0.04))
+    """IK remains tolerant; uses settings if available (raises only on numeric errors)."""
+    rms_thr = float(settings_get('ik.marker_error_RMS_max', 0.02) if settings_get else 0.02)
+    max_thr = float(settings_get('ik.marker_error_max_max', 0.04) if settings_get else 0.04)
 
     ikm = _safe_get(cycle, 'IK_markerErr', default=None)
     if not isinstance(ikm, dict):
@@ -193,177 +212,220 @@ def eval_ik_flags(cycle: Dict[str, Any]) -> Dict[str, bool]:
     if not _is_array_like(rms) or not _is_array_like(mxx):
         return {'IK_RMS_ok': True, 'IK_MAX_ok': True}
 
-    try:
-        rms_max_over_time = float(np.max(np.asarray(rms, dtype=float)))
-        max_max_over_time = float(np.max(np.asarray(mxx, dtype=float)))
-    except Exception:
-        return {'IK_RMS_ok': True, 'IK_MAX_ok': True}
+    rms_max_over_time = float(np.max(np.asarray(rms, dtype=float)))
+    max_max_over_time = float(np.max(np.asarray(mxx, dtype=float)))
 
-    return {
-        'IK_RMS_ok': rms_max_over_time <= rms_thr,
-        'IK_MAX_ok': max_max_over_time <= max_thr,
-    }
+    return {'IK_RMS_ok': rms_max_over_time <= rms_thr, 'IK_MAX_ok': max_max_over_time <= max_thr}
 
 
-def eval_so_flags(
-    cycle: Dict[str, Any],
-    side: str,
-    meta: Optional[Dict[str, Any]] = None,
-) -> Dict[str, bool]:
-    """Evaluate SO residual force/moment flags for a single cycle.
+def eval_so_flags(cycle: Dict[str, Any], side: str, meta: Optional[Dict[str, Any]] = None) -> Dict[str, bool]:
+    """Evaluate SO residual force/moment flags.
 
-    The evaluation is restricted to single-limb stance (contralateral Foot_Off
-    → contralateral Foot_Strike) mapped into SO_forces["time"]. We skip a fixed
-    number of frames at both window ends:
-      * Primary: n_skip = int(points_fs / so_frames_tol)
-      * Alias:   n_skip = int(points_fs * (so_ms_tol / 1000.0))
-
-    Parameters
-    ----------
-    cycle : dict
-        Cycle dict with sub-dicts: '<Contra>_Foot_Off', '<Contra>_Foot_Strike',
-        and 'SO_forces' containing 'time', 'FX','FY','FZ','MX','MY','MZ'.
-    side : {'left_stride','right_stride'}
-        Which stride this cycle belongs to (determines contralateral events).
-    meta : dict, optional
-        Root 'meta' dict to obtain points frame rate at ['header']['points']['frame_rate'].
-
-    Returns
-    -------
-    dict
-        {'SO_F_RMS_ok','SO_F_MAX_ok','SO_M_RMS_ok','SO_M_MAX_ok'} booleans.
-        Missing/invalid data -> all True.
+    Strict behavior: raises clear errors if settings/data are missing.
+    Computes thresholds for all components, but only applies the final decision to FY.
     """
-    # --- load settings.json directly (per user request) ---
-    conf = _load_local_settings()
-
-    def sget(path: str, default: Any) -> Any:
-        return _deep_get(conf, path, default)
-
-    # Thresholds
-    f_rms_thr = float(sget('so.force_rms_max', 10.0))
-    f_max_thr = float(sget('so.force_max_max', 25.0))
-    m_rms_thr = float(sget('so.moment_rms_max', 50.0))
-    m_max_thr = float(sget('so.moment_max_max', 75.0))
-
-    # Sampling: points fs for skip calculation
-    points_fs = float(_safe_get(meta or {}, 'header', 'points', 'frame_rate', default=0.0) or 0.0)
-
-    # Frames to skip at each end of SLS window
-    so_frames_tol = sget('so.so_frames_tol', None)
-    so_ms_tol = sget('so.so_ms_tol', None)
-    if so_frames_tol is not None and points_fs > 0:
-        try:
-            so_frames_tol = float(so_frames_tol)
-        except Exception:
-            so_frames_tol = None
-    if so_ms_tol is not None and points_fs > 0:
-        try:
-            so_ms_tol = float(so_ms_tol)
-        except Exception:
-            so_ms_tol = None
-
-    if isinstance(so_frames_tol, (int, float)) and so_frames_tol and points_fs > 0:
-        n_skip = int(points_fs / float(so_frames_tol))
-    elif isinstance(so_ms_tol, (int, float)) and so_ms_tol and points_fs > 0:
-        n_skip = int(points_fs * (float(so_ms_tol) / 1000.0))
+    # Toggle detailed report at every call by changing this literal:
+    if False:
+        DEBUG_REPORT_ALWAYS = True
     else:
-        # Fallback: keep former default logic (10 as divisor)
-        n_skip = int(points_fs / 10.0) if points_fs > 0 else 0
+        DEBUG_REPORT_ALWAYS = False
 
-    # Access contralateral events (normalize to scalar times)
+    # --- Settings (must exist) ---
+    conf = _load_local_settings()
+    so_conf = _deep_get(conf, 'so')
+    ms_tol = float(_deep_get(so_conf, 'so_ms_tol'))  # milliseconds (required)
+
+    # Decide RMS spec: exactly one of the three
+    rms_keys = ['force_rms_max', 'force_rms_max_pcGRF', 'force_rms_max_pcBW']
+    rms_present = [k for k in rms_keys if k in so_conf]
+    if len(rms_present) != 1:
+        raise ValueError(f"Ambiguous or missing RMS spec in settings.so — found {rms_present}, expected exactly one of {rms_keys}")
+    rms_key = rms_present[0]
+    rms_val = float(so_conf[rms_key])
+
+    # Decide MAX spec: exactly one of the three
+    max_keys = ['force_max_max', 'force_max_max_pcGRF', 'force_max_max_pcBW']
+    max_present = [k for k in max_keys if k in so_conf]
+    if len(max_present) != 1:
+        raise ValueError(f"Ambiguous or missing MAX spec in settings.so — found {max_present}, expected exactly one of {max_keys}")
+    max_key = max_present[0]
+    max_val = float(so_conf[max_key])
+
+    # --- Sampling ---
+    points_fs = float(_safe_get(meta or {}, 'header', 'points', 'frame_rate'))
+    if not np.isfinite(points_fs) or points_fs <= 0:
+        raise ValueError("meta['header']['points']['frame_rate'] is missing or invalid")
+    n_skip = int(points_fs * max(0.0, ms_tol) / 1000.0)
+
+    # --- SLS events ---
     off_key, str_key = _contralateral_events(side)
-    t_off = _as_scalar_time(_safe_get(cycle, off_key, 'time', default=None))
-    t_str = _as_scalar_time(_safe_get(cycle, str_key, 'time', default=None))
+    t_off = _as_scalar_time(_safe_get(cycle, off_key, 'time'))
+    t_str = _as_scalar_time(_safe_get(cycle, str_key, 'time'))
 
-    so = _safe_get(cycle, 'SO_forces', default=None)
+    so = _safe_get(cycle, 'SO_forces')
     if not isinstance(so, dict):
-        return {'SO_F_RMS_ok': True, 'SO_F_MAX_ok': True, 'SO_M_RMS_ok': True, 'SO_M_MAX_ok': True}
+        raise ValueError("cycle['SO_forces'] is missing or not a dict")
 
-    t_series = _safe_get(so, 'time', default=None)
-    FX = _safe_get(so, 'FX', default=None)
-    FY = _safe_get(so, 'FY', default=None)
-    FZ = _safe_get(so, 'FZ', default=None)
-    MX = _safe_get(so, 'MX', default=None)
-    MY = _safe_get(so, 'MY', default=None)
-    MZ = _safe_get(so, 'MZ', default=None)
+    t_series = np.asarray(_safe_get(so, 'time'), dtype=float)
+    FX = np.asarray(_safe_get(so, 'FX'), dtype=float)
+    FY = np.asarray(_safe_get(so, 'FY'), dtype=float)
+    FZ = np.asarray(_safe_get(so, 'FZ'), dtype=float)
+    MX = np.asarray(_safe_get(so, 'MX'), dtype=float)
+    MY = np.asarray(_safe_get(so, 'MY'), dtype=float)
+    MZ = np.asarray(_safe_get(so, 'MZ'), dtype=float)
 
-    # Validate availability
-    arrays_ok = all(_is_array_like(x) for x in (t_series, FX, FY, FZ, MX, MY, MZ))
-    if not arrays_ok:
-        return {'SO_F_RMS_ok': True, 'SO_F_MAX_ok': True, 'SO_M_RMS_ok': True, 'SO_M_MAX_ok': True}
+    if any(a.size == 0 for a in (t_series, FX, FY, FZ, MX, MY, MZ)):
+        raise ValueError("Empty arrays in SO_forces")
 
-    t_series = np.asarray(t_series, dtype=float)
-    FX = np.asarray(FX, dtype=float)
-    FY = np.asarray(FY, dtype=float)
-    FZ = np.asarray(FZ, dtype=float)
-    MX = np.asarray(MX, dtype=float)
-    MY = np.asarray(MY, dtype=float)
-    MZ = np.asarray(MZ, dtype=float)
-
-    if t_series.size == 0:
-        return {'SO_F_RMS_ok': True, 'SO_F_MAX_ok': True, 'SO_M_RMS_ok': True, 'SO_M_MAX_ok': True}
-
-    # Map window and crop by n_skip (robust to tiny windows)
-    win = _window_indices_from_times(t_series, t_off, t_str, n_skip)
-    if win is None:
-        return {'SO_F_RMS_ok': True, 'SO_F_MAX_ok': True, 'SO_M_RMS_ok': True, 'SO_M_MAX_ok': True}
-
-    i0, i1 = win
+    # SO window (trimmed by ms on points timeline)
+    i0, i1 = _window_indices_from_times(t_series, t_off, t_str, n_skip)
     sl = slice(i0, i1 + 1)
 
-    # Compute per-component RMS and MAX within window
-    f_rms = max(_rms(FX[sl]), _rms(FY[sl]), _rms(FZ[sl]))
-    f_max = max(_max_abs(FX[sl]), _max_abs(FY[sl]), _max_abs(FZ[sl]))
+    # SO values in SLS (absolute)
+    so_rms = {'FX': _rms(np.abs(FX[sl])), 'FY': _rms(np.abs(FY[sl])), 'FZ': _rms(np.abs(FZ[sl]))}
+    so_max = {'FX': _max_abs(FX[sl]),     'FY': _max_abs(FY[sl]),     'FZ': _max_abs(FZ[sl])}
 
-    m_rms = max(_rms(MX[sl]), _rms(MY[sl]), _rms(MZ[sl]))
+    # --- Forceplate streams (must exist) ---
+    analog = _safe_get(cycle, 'analog')
+    grf = _collect_fp_streams(analog)
+
+    # Map trimmed SO index window to analog via *fractions of cycle*
+    N_so = len(t_series)
+    if N_so < 2:
+        raise ValueError("SO_forces.time has insufficient length")
+    frac0 = i0 / (N_so - 1)
+    frac1 = i1 / (N_so - 1)
+
+    # Per-component grand stats across plates (in SLS)
+    fp_rms = {
+        'Fx': _fp_window_stat(grf['Fx'], frac0, frac1, mode='rms'),
+        'Fy': _fp_window_stat(grf['Fy'], frac0, frac1, mode='rms'),
+        'Fz': _fp_window_stat(grf['Fz'], frac0, frac1, mode='rms'),
+    }
+    fp_max = {
+        'Fx': _fp_window_stat(grf['Fx'], frac0, frac1, mode='max'),
+        'Fy': _fp_window_stat(grf['Fy'], frac0, frac1, mode='max'),
+        'Fz': _fp_window_stat(grf['Fz'], frac0, frac1, mode='max'),
+    }
+
+    # Bodyweight if needed
+    BW_N = None
+    if rms_key.endswith('_pcBW') or max_key.endswith('_pcBW'):
+        bodymass_kg = _safe_get(meta or {}, 'PROCESSING', 'Bodymass')
+        if bodymass_kg is None:
+            raise ValueError("Bodymass missing at meta['PROCESSING']['Bodymass'] required for %BW thresholds")
+        BW_N = float(bodymass_kg) * 9.81
+
+    # --- Build per-component thresholds (compute for all components) ---
+    # RMS
+    if rms_key == 'force_rms_max':
+        thr_rms = {'FX': rms_val, 'FY': rms_val, 'FZ': rms_val}
+    elif rms_key == 'force_rms_max_pcGRF':
+        pct = rms_val / 100.0
+        thr_rms = {
+            'FX': pct * fp_rms['Fy'],
+            'FY': pct * fp_rms['Fz'],
+            'FZ': pct * fp_rms['Fx'],
+        }
+    elif rms_key == 'force_rms_max_pcBW':
+        thr_val = (rms_val / 100.0) * float(BW_N)  # BW_N validated above
+        thr_rms = {'FX': thr_val, 'FY': thr_val, 'FZ': thr_val}
+    else:
+        raise RuntimeError("Unreachable RMS config case")
+
+    # MAX
+    if max_key == 'force_max_max':
+        thr_max = {'FX': max_val, 'FY': max_val, 'FZ': max_val}
+    elif max_key == 'force_max_max_pcGRF':
+        pct = max_val / 100.0
+        thr_max = {
+            'FX': pct * fp_max['Fy'],
+            'FY': pct * fp_max['Fz'],
+            'FZ': pct * fp_max['Fx'],
+        }
+    elif max_key == 'force_max_max_pcBW':
+        thr_val = (max_val / 100.0) * float(BW_N)  # BW_N validated above
+        thr_max = {'FX': thr_val, 'FY': thr_val, 'FZ': thr_val}
+    else:
+        raise RuntimeError("Unreachable MAX config case")
+
+    # --- Final decisions (TEMP: FY-only) ---
+    so_f_rms_ok = all(so_rms[k] < thr_rms[k] for k in ('FY',)) # add FX or FZ here to apply their check to the decission
+    so_f_max_ok = all(so_max[k] < thr_max[k] for k in ('FY',)) # add FX or FZ here to apply their check to the decission
+
+    # Moments (absolute thresholds; required in settings)
+    m_rms_thr = float(_deep_get(so_conf, 'moment_rms_max'))
+    m_max_thr = float(_deep_get(so_conf, 'moment_max_max'))
+    m_rms = max(_rms(np.abs(MX[sl])), _rms(np.abs(MY[sl])), _rms(np.abs(MZ[sl])))
     m_max = max(_max_abs(MX[sl]), _max_abs(MY[sl]), _max_abs(MZ[sl]))
-    print(f_rms_thr)
+
+    # ------------- Detailed console report -------------
+    if DEBUG_REPORT_ALWAYS or not getattr(eval_so_flags, "_printed", False):
+        denom = max(1, (len(t_series) - 1))
+        p0 = (i0 / denom) * 100.0
+        p1 = (i1 / denom) * 100.0
+        def _f(v: float) -> str: return f"{v:.3f}"
+
+        def _mode_str(which: str) -> str:
+            if which == 'rms':
+                if rms_key == 'force_rms_max': return f"{rms_val:.3f} N (absolute)"
+                if rms_key == 'force_rms_max_pcGRF': return f"{rms_val:.1f}% of GRF component RMS"
+                if rms_key == 'force_rms_max_pcBW': return f"{rms_val:.1f}% of BW"
+            else:
+                if max_key == 'force_max_max': return f"{max_val:.3f} N (absolute)"
+                if max_key == 'force_max_max_pcGRF': return f"{max_val:.1f}% of GRF component MAX"
+                if max_key == 'force_max_max_pcBW': return f"{max_val:.1f}% of BW"
+            return "?"
+
+        print("=== QC thresholds & decisions (FY-only decision active) ===")
+        print(f"SLS: indices [{i0}:{i1}] | %GC [{p0:.1f}%–{p1:.1f}%] | so_ms_tol={ms_tol:.1f} ms")
+        print(f"FP grand RMS (SLS): Fx={_f(fp_rms['Fx'])} N, Fy={_f(fp_rms['Fy'])} N, Fz={_f(fp_rms['Fz'])} N")
+        print(f"FP grand MAX (SLS): Fx={_f(fp_max['Fx'])} N, Fy={_f(fp_max['Fy'])} N, Fz={_f(fp_max['Fz'])} N")
+
+        print(f"SO forces RMS mode: {_mode_str('rms')}")
+        for comp, ref in (('FX','Fy'), ('FY','Fz'), ('FZ','Fx')):
+            print(f"  {comp}: value={_f(so_rms[comp])} N  < thr={_f(thr_rms[comp])} N  (ref=FP.{ref})  → {'OK' if so_rms[comp] < thr_rms[comp] else 'FAIL'}")
+        print(f"  → SO_F_RMS_ok (FY-only) = {'OK' if so_f_rms_ok else 'FAIL'}")
+
+        print(f"SO forces MAX mode: {_mode_str('max')}")
+        for comp, ref in (('FX','Fy'), ('FY','Fz'), ('FZ','Fx')):
+            print(f"  {comp}: value={_f(so_max[comp])} N  < thr={_f(thr_max[comp])} N  (ref=FP.{ref})  → {'OK' if so_max[comp] < thr_max[comp] else 'FAIL'}")
+        print(f"  → SO_F_MAX_ok (FY-only) = {'OK' if so_f_max_ok else 'FAIL'}")
+
+        print("SO moments (absolute thresholds):")
+        print(f"  RMS: value={_f(m_rms)} Nm  <= thr={_f(m_rms_thr)} Nm  → {'OK' if m_rms <= m_rms_thr else 'FAIL'}")
+        print(f"  MAX: value={_f(m_max)} Nm  <= thr={_f(m_max_thr)} Nm  → {'OK' if m_max <= m_max_thr else 'FAIL'}")
+
+        if not DEBUG_REPORT_ALWAYS:
+            eval_so_flags._printed = True
+
     return {
-        'SO_F_RMS_ok': f_rms <= f_rms_thr,
-        'SO_F_MAX_ok': f_max <= f_max_thr,
+        'SO_F_RMS_ok': so_f_rms_ok,
+        'SO_F_MAX_ok': so_f_max_ok,
         'SO_M_RMS_ok': m_rms <= m_rms_thr,
         'SO_M_MAX_ok': m_max <= m_max_thr,
     }
 
 
-def qc_cycle(
-    cycle: Dict[str, Any],
-    side: str,
-    meta: Optional[Dict[str, Any]] = None,
-    set_missing_flags_true: bool = True,
-) -> Dict[str, Any]:
-    """Run QC on a single cycle and set flags in-place."""
-    # IK
+def qc_cycle(cycle: Dict[str, Any], side: str, meta: Optional[Dict[str, Any]] = None, set_missing_flags_true: bool = True) -> Dict[str, Any]:
     ik_flags = eval_ik_flags(cycle)
-    # SO
     so_flags = eval_so_flags(cycle, side=side, meta=meta)
 
-    # Detect presence for conditional writing
-    ik_present = isinstance(_safe_get(cycle, 'IK_markerErr', default=None), dict)
-    so_present = isinstance(_safe_get(cycle, 'SO_forces', default=None), dict)
-
-    if set_missing_flags_true or ik_present:
-        cycle['IK_RMS_ok'] = bool(ik_flags['IK_RMS_ok'])
-        cycle['IK_MAX_ok'] = bool(ik_flags['IK_MAX_ok'])
-    if set_missing_flags_true or so_present:
-        cycle['SO_F_RMS_ok'] = bool(so_flags['SO_F_RMS_ok'])
-        cycle['SO_F_MAX_ok'] = bool(so_flags['SO_F_MAX_ok'])
-        cycle['SO_M_RMS_ok'] = bool(so_flags['SO_M_RMS_ok'])
-        cycle['SO_M_MAX_ok'] = bool(so_flags['SO_M_MAX_ok'])
-
+    cycle['IK_RMS_ok'] = bool(ik_flags['IK_RMS_ok'])
+    cycle['IK_MAX_ok'] = bool(ik_flags['IK_MAX_ok'])
+    cycle['SO_F_RMS_ok'] = bool(so_flags['SO_F_RMS_ok'])
+    cycle['SO_F_MAX_ok'] = bool(so_flags['SO_F_MAX_ok'])
+    cycle['SO_M_RMS_ok'] = bool(so_flags['SO_M_RMS_ok'])
+    cycle['SO_M_MAX_ok'] = bool(so_flags['SO_M_MAX_ok'])
     return cycle
 
 
 def qc_all(root: Dict[str, Any]) -> Dict[str, Any]:
-    """Run QC over all cycles in root dict (mutates in place)."""
     if not isinstance(root, dict):
-        return root
-
-    meta = _safe_get(root, 'meta', default={})
-
+        raise ValueError("qc_all expects the root dict")
+    meta = _safe_get(root, 'meta')
     for side in ('left_stride', 'right_stride'):
-        side_dict = _safe_get(root, side, default=None)
+        side_dict = _safe_get(root, side)
         if not isinstance(side_dict, dict):
             continue
         for cyc_key, cyc_val in list(side_dict.items()):
@@ -372,35 +434,4 @@ def qc_all(root: Dict[str, Any]) -> Dict[str, Any]:
             if not isinstance(cyc_val, dict):
                 continue
             qc_cycle(cyc_val, side=side, meta=meta)
-
     return root
-
-
-# ------------------------------
-# __main__ smoke test (optional)
-# ------------------------------
-if __name__ == '__main__':  # pragma: no cover
-    # Minimal synthetic arrays to sanity-check execution without real files
-    t = np.linspace(0, 1, 200)
-    cyc = {
-        'Left_Foot_Off': {'time': 0.2},
-        'Left_Foot_Strike': {'time': 0.8},
-        'SO_forces': {
-            'time': t,
-            'FX': np.zeros_like(t),
-            'FY': np.zeros_like(t),
-            'FZ': np.zeros_like(t),
-            'MX': np.zeros_like(t),
-            'MY': np.zeros_like(t),
-            'MZ': np.zeros_like(t),
-        },
-        'IK_markerErr': {
-            'marker_error_RMS': 0.001 * np.ones_like(t),
-            'marker_error_max': 0.003 * np.ones_like(t),
-        },
-    }
-    meta = {'header': {'points': {'frame_rate': 200.0}}}
-
-    print(eval_ik_flags(cyc))
-    print(eval_so_flags(cyc, side='right_stride', meta=meta))
-    print(qc_cycle(cyc, side='right_stride', meta=meta))

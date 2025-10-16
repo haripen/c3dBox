@@ -1,16 +1,20 @@
 {
+  "docs": "Configuration for IK/SO QC and UI. See the 'so.docs' block for how force thresholds work.",
   "ik": {
+    "docs": "IK thresholds (meters). Use absolute values.",
     "marker_error_RMS_max": 0.02,
     "marker_error_max_max": 0.04
   },
   "so": {
-    "force_rms_max": 50,
-    "force_max_max": 100,
+    "docs": "Thresholds:\n- Exactly ONE of these per metric:\n  * RMS: force_rms_max [N] | force_rms_max_pcGRF [% of component GRF RMS in SLS] | force_rms_max_pcBW [% of BW in N]\n  * MAX: force_max_max [N] | force_max_max_pcGRF [% of component GRF MAX in SLS] | force_max_max_pcBW [% of BW in N]\n- Mapping: SO.FX vs FP.y, SO.FY vs FP.z, SO.FZ vs FP.x; absolute values are used.\n- Bodyweight: BW = meta.PROCESSING.Bodymass * 9.81 [N].\n- so_ms_tol: milliseconds trimmed at start and end of SLS window.",
+    "force_rms_max_pcGRF": 6,
+    "force_max_max_pcGRF": 20,
     "moment_rms_max": 50,
     "moment_max_max": 75,
-    "so_ms_tol": 10
+    "so_ms_tol": 100
   },
   "ui": {
+    "docs": "UI preferences.",
     "start_fullscreen": true,
     "ylim_margin_pct": 0.05
   }
