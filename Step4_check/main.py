@@ -453,6 +453,7 @@ class PlotCell(QtWidgets.QWidget):
         self.canvas.draw_idle()
     def autoscale(self):
         # Use helper that autoscale both X & Y for visible & selected lines
+        plotting.apply_saved_selection(self.ax)
         lines = list(self.ax.lines)
         updated = plotting.autoscale_y_from_selected(lines, margin_pct=0.05)
         if not updated:
@@ -590,7 +591,9 @@ class PlotPage(QtWidgets.QWidget):
         for cell in self.cells:
             disp = cell.current_display_key or (cell.combo.currentText().strip() if cell.combo.count() else "")
             if not disp and cell.combo.count(): disp = cell.combo.itemText(0)
-            if disp: cell.plot(files, disp, show_left, show_right, filter_kinetic, filter_kinematic, current_mode, hide_deselected)
+            if disp:
+                cell.plot(files, disp, show_left, show_right, filter_kinetic, filter_kinematic, current_mode, hide_deselected)
+                plotting.apply_saved_selection(cell.ax)
     @QtCore.Slot()
     def _on_key_changed(self):
         print("[page] key changed; requesting window redraw+autoscale")

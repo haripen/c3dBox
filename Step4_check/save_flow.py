@@ -2,71 +2,66 @@
 """
 Save & audit flow for the Cycle Selection Tool.
 
-Responsibilities
-----------------
-- Merge per-cycle fields (manually_selected, reconstruction_ok, IK/SO flags) back to the
-  owning data dict.
-- Write sibling *_check.mat via io_mat.save_dict_check().
-- Maintain a baseline snapshot of manually_selected to detect "dirty" changes since last save.
-- Compute per-save changes by side×mode and final counts.
-- Call audit_log.log_selection_change(...) when there are any changes.
-- Provide a confirm-to-save prompt suitable for navigation or app close.
-- Install a Ctrl+S shortcut to save.
+Key points in this revision:
+- Decides the target path **before** writing (no late override).
+- Overwrites the same file when you opened a `_check.mat`, with a one-time confirm.
+- Uses `derive_check_path(...)` idempotently (no `_check_check.mat`).
+- Adds `save_as(...)` to write to a user-chosen path (enforces `_check.mat` suffix).
+- Keeps cycle flags in sync, recomputes QC if the module is available, and logs changes.
 
-This module is UI-light: it optionally uses a QMessageBox prompt and QShortcut,
-but all heavy lifting is pure Python and import-guarded so tests can run headless.
+This module is UI-light: it optionally uses Qt (guarded imports) but all heavy lifting
+is pure Python so tests can run headless.
 """
 from __future__ import annotations
+
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Iterable
+
 import copy
 
-# Optional Qt bits (safe imports)
+# Optional Qt bits
 try:
     from PySide6 import QtWidgets, QtGui
-    from PySide6.QtGui import QKeySequence
-except Exception:  # pragma: no cover - optional
+except Exception:  # pragma: no cover
     QtWidgets = None  # type: ignore
     QtGui = None  # type: ignore
-    QKeySequence = None  # type: ignore
 
-    
-# Project-local imports
-from .io_mat import derive_check_path, save_dict_check
+# Writing MAT files directly (for Save As)
+try:
+    import scipy.io as _sio  # type: ignore
+except Exception:  # pragma: no cover
+    _sio = None  # type: ignore
 
+from . import audit_log
+from .io_mat import derive_check_path
+from . import io_mat as _iomod
+
+# Optional QC and counts helpers
 try:
     from . import qc as _qc  # type: ignore
 except Exception:
     _qc = None  # type: ignore
-    
-try:
-    from . import io_mat  # type: ignore
-except Exception:
-    import io_mat  # type: ignore
 
-# status is optional; we fall back to an internal implementation if missing
 try:
     from .status import compute_counts_by_side_and_mode as _counts_side_mode  # type: ignore
 except Exception:
     _counts_side_mode = None  # type: ignore
 
-try:
-    from . import audit_log  # type: ignore
-except Exception:
-    import audit_log  # type: ignore
 
 FIELDS_TO_SAVE = {
     "manually_selected",
     "reconstruction_ok",
-    # Allow any *_ok style boolean flags (IK/SO etc.)
+    # IK/SO typical flags
     "IK_RMS_ok", "IK_MAX_ok",
     "SO_F_RMS_ok", "SO_F_MAX_ok",
     "SO_M_RMS_ok", "SO_M_MAX_ok",
-    # Some datasets use generic flags too
+    # generic shortcuts if present
     "IK_ok", "SO_ok",
-    "kinetic",  # keep this for mode bookkeeping if present
+    # bookkeeping
+    "kinetic",
 }
+
 
 def _normalize_side(s: str) -> str:
     s = (s or "").lower()
@@ -74,7 +69,6 @@ def _normalize_side(s: str) -> str:
         return "left"
     if "right" in s:
         return "right"
-    # allow 'l'/'r'
     if s in ("l", "r"):
         return "left" if s == "l" else "right"
     return s or "unknown"
@@ -84,15 +78,7 @@ def _cycle_id(side: str, name: str) -> str:
     return f"{_normalize_side(side)}::{name}"
 
 
-def _ensure_cycle_fields(cyc: Dict[str, Any]) -> None:
-    cyc.setdefault("manually_selected", 1)
-    cyc.setdefault("reconstruction_ok", True)
-
-
 def _internal_counts_by_side_and_mode(cycles: Iterable[Mapping[str, Any]]) -> Dict[str, Dict[str, Dict[str, int]]]:
-    """
-    Fallback count computation if status.compute_counts_by_side_and_mode is unavailable.
-    """
     counts = {
         "left": {"kinetic": {"selected": 0, "unselected": 0},
                  "kinematic": {"selected": 0, "unselected": 0}},
@@ -100,7 +86,7 @@ def _internal_counts_by_side_and_mode(cycles: Iterable[Mapping[str, Any]]) -> Di
                   "kinematic": {"selected": 0, "unselected": 0}},
     }
     for c in cycles:
-        side = _normalize_side(c.get("side") or c.get("stride_side") or c.get("stride") or "")
+        side = _normalize_side(c.get("side") or c.get("stride_side") or "")
         if side not in ("left", "right"):
             continue
         flags = c.get("flags") or c
@@ -112,46 +98,52 @@ def _internal_counts_by_side_and_mode(cycles: Iterable[Mapping[str, Any]]) -> Di
     return counts
 
 
+def _write_mat_to_path(path: Path, data: Dict[str, Any]) -> Path:
+    """
+    Write `data` to an explicit `path` using the same options as io_mat.save_dict_check.
+    """
+    if _sio is None:
+        # fallback: let io_mat save to a derived path near `path`
+        _iomod.save_dict_check(str(path), data)  # type: ignore[attr-defined]
+        return path
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _sio.savemat(
+        str(path),
+        data,
+        do_compression=True,
+        long_field_names=True,
+        format="5",
+    )
+    return path
+
+
 @dataclass
 class SaveController:
     root: str
     pid: str
     trial_type: str
-    original_path: str
+    original_path: str                # file that was opened
     data: Dict[str, Any]
     cycles: List[Dict[str, Any]]
     username: Optional[str] = None
-    # function to show a username picker; receives (parent, known_usernames) and returns a string or None
-    get_username_cb: Optional[Callable[[Any, List[str]], Optional[str]]] = None
 
-    # internals
-    _baseline_sel: Dict[str, int] = field(default_factory=dict)  # cycle_id -> manually_selected(0/1)
+    # Internals
+    _baseline_sel: Dict[str, int] = field(default_factory=dict)  # cycle_id -> 0/1
     _have_saved_once: bool = False
+    save_path: Optional[Path] = None                             # where subsequent saves go
 
-    # ---------------- API ----------------
-    def install_ctrl_s_shortcut(self, widget: Any) -> None:
-        """Install Ctrl+S (or Cmd+S on mac) on the given widget to trigger save_now."""
-        if QtWidgets is None or QKeySequence is None:
-            return
-        sc = QtGui.QShortcut(QKeySequence.Save, widget)  # type: ignore[arg-type]
-        sc.setContext(QtGui.Qt.ApplicationShortcut)  # type: ignore[attr-defined]
-        sc.activated.connect(lambda: self.save_now(parent=widget))  # type: ignore[attr-defined]
+    def __post_init__(self) -> None:
+        # Default save path: if opened a _check → same file, else derive sibling _check
+        op = Path(self.original_path)
+        self.save_path = op if op.name.lower().endswith("_check.mat") else derive_check_path(op)
+        self.update_baseline()
+        # If we opened a _check that already exists, consider it "already saved once"
+        self._have_saved_once = self.save_path.exists()
 
-    def is_dirty(self) -> bool:
-        """Return True if any cycle's manually_selected differs from baseline."""
-        if not self._baseline_sel:
-            return False
-        for c in self.cycles:
-            side = c.get("side") or ""
-            name = c.get("name") or ""
-            cid = _cycle_id(side, name)
-            current = 1 if (c.get("flags", {}).get("manually_selected", 1) in (1, True)) else 0
-            if self._baseline_sel.get(cid, current) != current:
-                return True
-        return False
+    # ---------- Baseline & dirty ----------
 
     def update_baseline(self) -> None:
-        """Refresh the baseline snapshot from current cycles."""
         self._baseline_sel.clear()
         for c in self.cycles:
             side = c.get("side") or ""
@@ -161,11 +153,22 @@ class SaveController:
             cur = 1 if (flags.get("manually_selected", 1) in (1, True)) else 0
             self._baseline_sel[cid] = cur
 
+    def is_dirty(self) -> bool:
+        if not self._baseline_sel:
+            return False
+        for c in self.cycles:
+            side = c.get("side") or ""
+            name = c.get("name") or ""
+            cid = _cycle_id(side, name)
+            flags = c.get("flags", {})
+            cur = 1 if (flags.get("manually_selected", 1) in (1, True)) else 0
+            if self._baseline_sel.get(cid, cur) != cur:
+                return True
+        return False
+
+    # ---------- QC & merge flags ----------
+
     def _ensure_qc_flags_before_save(self) -> None:
-        """
-        Ensure each cycle dict has the QC keys expected by FIELDS_TO_SAVE.
-        If the qc module is available, (re)compute; otherwise set safe defaults.
-        """
         data = self.data or {}
         meta = data.get("meta", {})
         for side in ("left_stride", "right_stride"):
@@ -185,34 +188,29 @@ class SaveController:
                         cyc.update(_qc.eval_so_flags(cyc, side, meta))
                     except Exception:
                         pass
-                # Defaults if still missing:
                 cyc.setdefault("IK_RMS_ok", True)
                 cyc.setdefault("IK_MAX_ok", True)
                 for k in ("SO_F_RMS_ok","SO_F_MAX_ok","SO_M_RMS_ok","SO_M_MAX_ok"):
                     cyc.setdefault(k, True)
 
     def _merge_cycle_flags_back(self) -> None:
-        """Write whitelisted cycle flags back into the main data dict."""
         for c in self.cycles:
             side = c.get("side") or ""
             name = c.get("name") or ""
             if not side or not name:
                 continue
-            side_key = side  # already in correct keys like 'left_stride'/'right_stride'
-            owner_side: Dict[str, Any] = self.data.setdefault(side_key, {})
+            owner_side: Dict[str, Any] = self.data.setdefault(side, {})
             target: Dict[str, Any] = owner_side.setdefault(name, {})
-            _ensure_cycle_fields(target)
-
+            target.setdefault("manually_selected", 1)
+            target.setdefault("reconstruction_ok", True)
             flags = (c.get("flags") or {}).copy()
-            # Allow saving any "*_ok" flags too
             for k, v in list(flags.items()):
                 if (k in FIELDS_TO_SAVE) or (k.endswith("_ok") and isinstance(v, (bool, int))):
                     target[k] = int(v) if isinstance(v, bool) else v
 
+    # ---------- Counts & logging ----------
+
     def _changes_breakdown(self) -> Dict[str, Dict[str, int]]:
-        """
-        Count how many cycles changed selection since baseline by side×mode.
-        """
         changes = {"left": {"kinetic": 0, "kinematic": 0},
                    "right": {"kinetic": 0, "kinematic": 0}}
         for c in self.cycles:
@@ -238,107 +236,57 @@ class SaveController:
                 pass
         return _internal_counts_by_side_and_mode(self.cycles)
 
-    def _choose_username(self, parent: Any) -> str:
-        # If a username is already set, keep it.
-        if self.username and self.username.strip():
-            return self.username.strip()
+    # ---------- Save paths ----------
 
-        # Try to suggest from logs
-        known_users: List[str] = []
-        try:
-            known_users = audit_log.list_usernames(self.root)  # type: ignore[attr-defined]
-        except Exception:
-            known_users = []
+    def _decide_target_path(self) -> Path:
+        assert self.save_path is not None
+        return Path(self.save_path)
 
-        if self.get_username_cb is not None:
-            try:
-                name = self.get_username_cb(parent, known_users)
-                if name:
-                    self.username = name.strip()
-                    return self.username
-            except Exception:
-                pass
+    # ---------- Public save APIs ----------
 
-        # As a minimal fallback, use Qt input dialog if available
-        if QtWidgets is not None:
-            try:
-                text, ok = QtWidgets.QInputDialog.getText(
-                    parent, "Save – Username",
-                    "Who is saving this selection?\n(used in the audit log)",
-                )
-                if ok and text.strip():
-                    self.username = text.strip()
-                    return self.username
-            except Exception:
-                pass
-
-        self.username = "unknown"
-        return self.username
-
-    # -------- UI integrated helpers --------
-    def maybe_prompt_to_save_on_navigation(self, parent: Any) -> Optional[bool]:
-        """
-        Call before switching PID or trial_type or before closing the app.
-
-        Returns:
-            True  -> proceed (user saved or discarded)
-            False -> abort navigation
-            None  -> no action required (no changes)
-        """
-        if not self.is_dirty() and self._have_saved_once:
-            return None  # nothing to do
-
-        if not self.is_dirty():
-            return True
-
-        if QtWidgets is None:
-            # Headless default: auto-save
-            self.save_now(parent=parent)
-            return True
-
-        mbox = QtWidgets.QMessageBox(parent)
-        mbox.setWindowTitle("Unsaved changes")
-        mbox.setText("You have unsaved cycle selections. Save before switching?")
-        mbox.setIcon(QtWidgets.QMessageBox.Warning)
-        save_btn = mbox.addButton("Save", QtWidgets.QMessageBox.AcceptRole)
-        dont_btn = mbox.addButton("Don't Save", QtWidgets.QMessageBox.DestructiveRole)
-        cancel_btn = mbox.addButton("Cancel", QtWidgets.QMessageBox.RejectRole)
-        mbox.setDefaultButton(save_btn)
-        mbox.exec()
-
-        clicked = mbox.clickedButton()
-        if clicked is save_btn:
-            self.save_now(parent=parent)
-            return True
-        elif clicked is dont_btn:
-            return True
-        else:
-            return False
-
-    # -------- core save --------
     def save_now(self, parent: Any = None) -> str:
         """
-        Write <original>_check.mat and append an audit log line if anything changed.
+        Write to the current target path (overwrite if it's the opened `_check.mat`).
 
         Returns:
-            The path to the saved *_check.mat.
+            The path to the saved file (str). Empty string if user aborted.
         """
-        # make sure QC flags are present
-        self._ensure_qc_flags_before_save()
-        # username – this may bring up a prompt
-        self._choose_username(parent)
+        # 0) Determine target before writing
+        target = self._decide_target_path()
 
-        # 1) merge flags back
+        # 1) Optional overwrite prompt only the *first* time when saving over an opened _check
+        if (str(target).lower().endswith("_check.mat")
+            and target.exists()
+            and not self._have_saved_once
+            and QtWidgets is not None
+        ):
+            r = QtWidgets.QMessageBox.question(
+                parent, "Overwrite existing",
+                f"Overwrite existing file?\n{target.name}",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                QtWidgets.QMessageBox.Yes,
+            )
+            if r != QtWidgets.QMessageBox.Yes:
+                return ""  # aborted
+
+        # 2) Make sure QC present then merge flags back
+        self._ensure_qc_flags_before_save()
         self._merge_cycle_flags_back()
 
-        # 2) compute change breakdown and final counts
+        # 3) Compute changes & counts *before* writing
         changes_breakdown = self._changes_breakdown()
         final_counts = self._final_counts()
 
-        # 3) write out the check file
-        out_path = io_mat.save_dict_check(self.original_path, self.data)  # type: ignore[attr-defined]
+        # 4) Write file
+        if target == Path(self.original_path) or str(target).lower().endswith("_check.mat"):
+            # Write exactly to `target`
+            _write_mat_to_path(target, self.data)
+        else:
+            # Fallback: use io_mat (derives a _check near original)
+            target = _iomod.save_dict_check(self.original_path, self.data)  # type: ignore[attr-defined]
+            target = Path(target)
 
-        # 4) audit log if there are changes
+        # 5) Audit log only if anything changed
         total_changes = sum(changes_breakdown.get("left", {}).values()) + \
                         sum(changes_breakdown.get("right", {}).values())
         if total_changes > 0:
@@ -348,25 +296,35 @@ class SaveController:
                     changes_breakdown, final_counts
                 )
             except Exception:
-                # logging should not block saving
-                pass
+                pass  # never block saving on logging failures
 
-        # 5) refresh baseline & flags
+        # 6) Update baseline and mark as saved
         self.update_baseline()
         self._have_saved_once = True
-        
-        # 6) Optionally, prompt “Overwrite / Save As…” the first time we save over an existing _check
-        orig = Path(self.original_path)
-        if orig.name.lower().endswith("_check.mat"):
-            out_path = orig  # overwrite same file
-            if parent and out_path.exists():  # ask once if you like
-                if QtWidgets and QtWidgets.QMessageBox.question(
-                    parent, "Overwrite existing", f"Overwrite\n{out_path.name}?",
-                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-                    QtWidgets.QMessageBox.Yes
-                ) == QtWidgets.QMessageBox.No:
-                    return False
-        else:
-            out_path = derive_check_path(orig)
-        
-        return str(out_path)
+        self.save_path = target
+
+        return str(target)
+
+    def save_as(self, parent: Any = None) -> str:
+        """
+        Prompt for a new target and save there. Enforces `_check.mat` suffix.
+        """
+        if QtWidgets is None:
+            # Headless fallback: append `_check.mat` if needed and write
+            tgt = derive_check_path(Path(self.original_path))
+            self.save_path = tgt
+            return self.save_now(parent)
+
+        start_dir = str(Path(self.save_path or self.original_path).parent)
+        fn, _ = QtWidgets.QFileDialog.getSaveFileName(
+            parent, "Save As (_check.mat)", start_dir, "MAT files (*.mat)"
+        )
+        if not fn:
+            return ""
+        tgt = Path(fn)
+        if not tgt.name.lower().endswith("_check.mat"):
+            tgt = derive_check_path(tgt)
+        self.save_path = tgt
+        # When choosing a new target, reset the one-time overwrite confirm
+        self._have_saved_once = tgt.exists()
+        return self.save_now(parent)

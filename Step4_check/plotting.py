@@ -453,3 +453,23 @@ def autoscale_y_from_selected(
     if canvas is not None:
         canvas.draw_idle()
     return True
+
+# --- manually_selected drive appearance on startup ---
+
+def set_line_selected(line: Line2D, selected: bool) -> None:
+    """Apply selection style and cache flag in line._meta."""
+    if not hasattr(line, "_meta"):
+        line._meta = {}
+    line._meta["manually_selected"] = 1 if selected else 0
+    # visual: opaque if selected, dim if not
+    line.set_alpha(1.0 if selected else 0.2)
+
+def apply_saved_selection(ax) -> None:
+    """On (re)load: read each line's saved flag and style it."""
+    any_change = False
+    for ln in ax.lines:
+        sel = bool(getattr(ln, "_meta", {}).get("manually_selected", 1))
+        set_line_selected(ln, sel)
+        any_change = True
+    if any_change and ax.figure.canvas:
+        ax.figure.canvas.draw_idle()
