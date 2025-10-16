@@ -41,17 +41,10 @@ def load_dict(path: str | Path) -> Dict[str, Any]:
 
 
 def derive_check_path(original_path: str | Path) -> Path:
-    """
-    Derive the sibling *_check.mat path for a given original file.
-
-    Examples
-    --------
-    /data/session1/file.mat       -> /data/session1/file_check.mat
-    /data/session1/file           -> /data/session1/file_check.mat
-    /data/session1/file.v1.mat    -> /data/session1/file.v1_check.mat
-    """
     p = Path(original_path)
-    # If it ends with .mat, drop just that suffix; otherwise keep name as-is.
+    name = p.name
+    if name.lower().endswith("_check.mat"):
+        return p  # idempotent
     stem = p.stem if p.suffix.lower() == ".mat" else p.name
     return p.with_name(f"{stem}_check.mat")
 

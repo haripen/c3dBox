@@ -17,7 +17,7 @@ This module is UI-light: it optionally uses a QMessageBox prompt and QShortcut,
 but all heavy lifting is pure Python and import-guarded so tests can run headless.
 """
 from __future__ import annotations
-
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 import copy
@@ -33,6 +33,8 @@ except Exception:  # pragma: no cover - optional
 
     
 # Project-local imports
+from .io_mat import derive_check_path, save_dict_check
+
 try:
     from . import qc as _qc  # type: ignore
 except Exception:
@@ -352,4 +354,19 @@ class SaveController:
         # 5) refresh baseline & flags
         self.update_baseline()
         self._have_saved_once = True
+        
+        # 6) Optionally, prompt “Overwrite / Save As…” the first time we save over an existing _check
+        orig = Path(self.original_path)
+        if orig.name.lower().endswith("_check.mat"):
+            out_path = orig  # overwrite same file
+            if parent and out_path.exists():  # ask once if you like
+                if QtWidgets and QtWidgets.QMessageBox.question(
+                    parent, "Overwrite existing", f"Overwrite\n{out_path.name}?",
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                    QtWidgets.QMessageBox.Yes
+                ) == QtWidgets.QMessageBox.No:
+                    return False
+        else:
+            out_path = derive_check_path(orig)
+        
         return str(out_path)

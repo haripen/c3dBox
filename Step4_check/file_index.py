@@ -6,7 +6,20 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Tuple, Iterable
+from pathlib import Path
 
+def _variant_priority(path: str) -> tuple[int, str]:
+    n = Path(path).name.lower()
+    # Highest → lowest
+    if n.endswith("_splitcycles_osim_check.mat"):
+        return (4, "osim_check")
+    if n.endswith("_splitcycles_check.mat"):
+        return (3, "check")
+    if n.endswith("_splitcycles_osim.mat"):
+        return (2, "osim")
+    if n.endswith("_splitcycles.mat"):
+        return (1, "base")
+    return (0, "other")
 
 @dataclass(frozen=True)
 class FileMeta:
@@ -16,6 +29,9 @@ class FileMeta:
     original_trial_type: str # as in filename (e.g., WalkA03)
     session: str             # e.g., Dynamic03
     groups: Tuple[str, ...] = tuple()
+    datetime: str = ""       # e.g., 2022-10-25_13-52-18
+    variant: str = "base"
+    priority: int = 1
 
 
 _FILENAME_RE = re.compile(
@@ -50,12 +66,13 @@ def scan_root(root: str | Path) -> List[FileMeta]:
     for p in sorted(root.rglob("*_splitCycles*.mat")):
         m = _FILENAME_RE.match(p.name)
         if not m:
-            # Skip unknown naming without error
             continue
         pid = m.group("pid")
         trial_full = m.group("trial")
         session = m.group("session")
         base = _strip_trailing_digits(trial_full)
+        dt_str = f"{m.group('date')}_{m.group('time')}"
+        prio, var = _variant_priority(str(p))
         out.append(
             FileMeta(
                 path=str(p),
@@ -64,6 +81,9 @@ def scan_root(root: str | Path) -> List[FileMeta]:
                 original_trial_type=trial_full,
                 session=session,
                 groups=_candidate_groups(),
+                datetime=dt_str,
+                variant=var,
+                priority=prio,
             )
         )
     return out
@@ -74,43 +94,30 @@ def build_indices(files: Iterable[FileMeta]) -> tuple[
     Dict[str, List[str]],
     Dict[str, Dict[str, List[FileMeta]]],
 ]:
-    """
-    Returns:
-      - participants: sorted unique participant IDs
-      - trial_types_by_pid: {pid: [base_trial_types]}  (e.g., {"Rd0001": ["WalkA", "WalkB"]})
-      - files_by_pid_type: {pid: {base_trial_type: [FileMeta... in session order]}}
-    """
-    # Deduplicate by full path
-    seen = set()
-    dedup: List[FileMeta] = []
+    # key = (pid, base_trial_type, datetime, original_trial_type)
+    best: Dict[tuple, FileMeta] = {}
     for f in files:
-        if f.path in seen:
-            continue
-        seen.add(f.path)
-        dedup.append(f)
+        k = (f.pid, _strip_trailing_digits(f.trial_type), f.datetime, f.original_trial_type)
+        cur = best.get(k)
+        if cur is None or f.priority > cur.priority:
+            best[k] = f
+
+    dedup = list(best.values())
 
     participants = sorted({f.pid for f in dedup})
-
     trial_types_by_pid: Dict[str, List[str]] = {}
     files_by_pid_type: Dict[str, Dict[str, List[FileMeta]]] = {}
-
     for f in dedup:
-        trial_base = _strip_trailing_digits(f.trial_type)  # idempotent
-        # pid -> types
-        types = trial_types_by_pid.setdefault(f.pid, [])
-        if trial_base not in types:
-            types.append(trial_base)
+        t = _strip_trailing_digits(f.trial_type)
+        trial_types_by_pid.setdefault(f.pid, [])
+        if t not in trial_types_by_pid[f.pid]:
+            trial_types_by_pid[f.pid].append(t)
+        files_by_pid_type.setdefault(f.pid, {}).setdefault(t, []).append(f)
 
-        # pid -> base_type -> files
-        files_by_pid_type.setdefault(f.pid, {})
-        files_by_pid_type[f.pid].setdefault(trial_base, []).append(f)
-
-    # Sort types and files (keep sessions chronological by filename)
-    for pid, lst in trial_types_by_pid.items():
-        trial_types_by_pid[pid] = sorted(lst)
-
+    for pid in trial_types_by_pid:
+        trial_types_by_pid[pid].sort()
     for pid, inner in files_by_pid_type.items():
-        for t in list(inner.keys()):
-            inner[t] = sorted(inner[t], key=lambda fm: fm.path)
+        for t in inner:
+            inner[t].sort(key=lambda fm: (fm.datetime, fm.original_trial_type))
 
     return participants, trial_types_by_pid, files_by_pid_type
