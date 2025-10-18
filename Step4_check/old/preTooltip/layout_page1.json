@@ -1,0 +1,62 @@
+{
+  "name": "Page 1: Angles & Moments",
+  "rows": 3,
+  "cols": 6,
+  "x_axis_label": "% cycle",
+  "cells": [
+    {
+      "title": "Hip Angles",
+      "options": [
+        "LHipAngles",
+        "RHipAngles"
+      ],
+      "default": "LHipAngles",
+      "kind": "point_3d"
+    },
+    {
+      "title": "Knee Angles",
+      "options": [
+        "LKneeAngles",
+        "RKneeAngles"
+      ],
+      "default": "LKneeAngles",
+      "kind": "point_3d"
+    },
+    {
+      "title": "Ankle Angles",
+      "options": [
+        "LAnkleAngles",
+        "RAnkleAngles"
+      ],
+      "default": "LAnkleAngles",
+      "kind": "point_3d"
+    },
+    {
+      "title": "Hip Moments",
+      "options": [
+        "LHipMoment",
+        "RHipMoment"
+      ],
+      "default": "LHipMoment",
+      "kind": "point_3d"
+    },
+    {
+      "title": "Knee Moments",
+      "options": [
+        "LKneeMoment",
+        "RKneeMoment"
+      ],
+      "default": "LKneeMoment",
+      "kind": "point_3d"
+    },
+    {
+      "title": "Ankle Moments",
+      "options": [
+        "LAnkleMoment",
+        "RAnkleMoment"
+      ],
+      "default": "LAnkleMoment",
+      "kind": "point_3d"
+    }
+  ]
+}

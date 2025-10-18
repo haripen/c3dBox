@@ -1,0 +1,7 @@
+iso_datetime,username,pid,trial_type,left_kinetic_changed,left_kinematic_changed,right_kinetic_changed,right_kinematic_changed,left_kinetic_sel,left_kinetic_unsel,left_kinematic_sel,left_kinematic_unsel,right_kinetic_sel,right_kinetic_unsel,right_kinematic_sel,right_kinematic_unsel
+2025-10-13T18:00:09,HP,Rd0001,WalkA,2,8,2,2,3,2,15,8,3,2,23,2
+2025-10-13T18:03:46,HP,Rd0001,WalkA,3,15,3,23,0,5,0,23,0,5,0,25
+2025-10-13T18:17:53,HP,Rd0001,WalkA,0,0,5,25,5,5,23,23,0,10,0,50
+2025-10-13T18:20:17,HP,Rd0001,WalkA,5,23,10,50,10,0,46,0,10,0,50,0
+2025-10-13T18:22:14,HP,Rd0001,WalkA,10,46,0,0,0,10,0,46,10,0,50,0
+2025-10-13T18:30:24,HP,Rd0001,WalkA,5,23,0,0,0,5,0,23,5,0,25,0

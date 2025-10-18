@@ -1,0 +1,92 @@
+{
+  "name": "Page 2 — Kinetics & Quality",
+  "rows": 3,
+  "cols": 6,
+  "x_axis_label": "% cycle",
+  "cells": [
+    {
+      "title": "GRF (all plates)",
+      "options": [
+        "Force_Fx*",
+        "Force_Fy*",
+        "Force_Fz*"
+      ],
+      "default_by_row": [
+        "Force_Fx*",
+        "Force_Fy*",
+        "Force_Fz*"
+      ],
+      "kind": "grf_multi"
+    },
+    {
+      "title": "Hip JRF",
+      "options": [
+        "hip_on_femur_in_femur_fx",
+        "hip_on_femur_in_femur_fy",
+        "hip_on_femur_in_femur_fz"
+      ],
+      "default_by_row": [
+        "hip_on_femur_in_femur_fx",
+        "hip_on_femur_in_femur_fy",
+        "hip_on_femur_in_femur_fz"
+      ],
+      "kind": "jrf"
+    },
+    {
+      "title": "Knee JRF",
+      "options": [
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fx",
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fy",
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fz"
+      ],
+      "default_by_row": [
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fx",
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fy",
+        "med_cond_weld_on_tibial_plat_in_tibial_plat_fz"
+      ],
+      "kind": "jrf"
+    },
+    {
+      "title": "Ankle JRF",
+      "options": [
+        "ankle_on_talus_in_talus_fx",
+        "ankle_on_talus_in_talus_fy",
+        "ankle_on_talus_in_talus_fz"
+      ],
+      "default_by_row": [
+        "ankle_on_talus_in_talus_fx",
+        "ankle_on_talus_in_talus_fy",
+        "ankle_on_talus_in_talus_fz"
+      ],
+      "kind": "jrf"
+    },
+    {
+      "title": "IK errors",
+      "options": [
+        "IK_markerErr.total_squared_error",
+        "IK_markerErr.marker_error_RMS",
+        "IK_markerErr.marker_error_max"
+      ],
+      "default_by_row": [
+        "IK_markerErr.total_squared_error",
+        "IK_markerErr.marker_error_RMS",
+        "IK_markerErr.marker_error_max"
+      ],
+      "kind": "ik_err"
+    },
+    {
+      "title": "SO residuals (Forces)",
+      "options": [
+        "SO_forces.FX",
+        "SO_forces.FY",
+        "SO_forces.FZ"
+      ],
+      "default_by_row": [
+        "SO_forces.FX",
+        "SO_forces.FY",
+        "SO_forces.FZ"
+      ],
+      "kind": "so_forces"
+    }
+  ]
+}

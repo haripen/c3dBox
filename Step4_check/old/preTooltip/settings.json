@@ -1,0 +1,17 @@
+{
+  "ik": {
+    "marker_error_RMS_max": 0.002,
+    "marker_error_max_max": 0.004
+  },
+  "so": {
+    "force_rms_max": 10,
+    "force_max_max": 25,
+    "moment_rms_max": 50,
+    "moment_max_max": 75,
+    "so_frames_tol": 10
+  },
+  "ui": {
+    "start_fullscreen": true,
+    "ylim_margin_pct": 0.05
+  }
+}
