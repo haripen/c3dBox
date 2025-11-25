@@ -1,0 +1,19 @@
+name: c3d_to_matCycles
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy>=1.26
+  - scipy>=1.11
+  - pandas
+  - ezc3d
+  - tk
+  - pyinstaller
+  - pyqt
+  - pyside6>=6.6
+  - matplotlib>=3.8
+  - h5py>=3.9
+  - pip
+  - pip:
+      - qt-material>=2.14.2  # optional theme for nicer look; safe to remove 
