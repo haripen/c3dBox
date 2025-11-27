@@ -2,9 +2,9 @@
 """
 load file and show structure
 """
-from utils_py.mat2dict import loadmat_to_dict
+from .mat2dict import loadmat_to_dict
 fn = r"C:\Data_Local\opensim_WalkA_extracted_upd\Rd0001_Rd0001_1993_06_18\2022_10_25\matfiles\Rd0001_Rd0001_2022-10-25_13-51-45_Dynamic01_WalkA01_fp0_clean_cropped_splitCycles_osim.mat"
-fn = r"C:\GitHub\c3dBox\example\mat\split_to_cycles\walk_splitCycles.mat"
+fn = r"C:\Data_Local\PRO_checked_mat\Rd0001_Rd0001_2022-10-25_13-51-45_Dynamic01_WalkA01_fp0_clean_cropped_splitCycles_osim_check.mat"
 d = loadmat_to_dict(fn)
 
 from collections.abc import Mapping, Sequence
