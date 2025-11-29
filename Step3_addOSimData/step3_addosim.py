@@ -30,7 +30,7 @@ import gc
 import argparse
 import hashlib
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any, Callable
 
 import numpy as np
 import scipy.io
@@ -289,6 +289,8 @@ def auto_shorten(name: str, maxlen: int = 63) -> str:
     keep = maxlen - 1 - len(h)  # room for '_' + hash
     return short[:keep] + "_" + h
 
+AUTOSHORT_SEEN = set()
+
 def make_fieldname(orig: str, translation: Dict[str, str], used: set, logf, key_for_log: str) -> str:
     """
     Map 'orig' to a safe MATLAB struct field name (≤63 chars), using:
@@ -300,7 +302,10 @@ def make_fieldname(orig: str, translation: Dict[str, str], used: set, logf, key_
     if len(candidate) > 63:
         before = candidate
         candidate = auto_shorten(candidate, 63)
-        logf.write(f"[INFO] AUTOSHORT {key_for_log} :: '{before}' -> '{candidate}'\n")
+        key_tuple = (key_for_log, before, candidate)
+        if key_tuple not in AUTOSHORT_SEEN:
+            AUTOSHORT_SEEN.add(key_tuple)
+            logf.write(f"[INFO] AUTOSHORT {key_for_log} :: '{before}' -> '{candidate}'\n")
 
     # Enforce MATLAB field name constraints (alnum or '_', start with letter)
     # Our tokens comply already, but guard against edge cases:
@@ -329,7 +334,8 @@ def add_osim_to_mat(mat_path: Path,
                     osim_index: Dict[str, Dict[str, Path]],
                     osim_cfg: Dict[str, Any],
                     translation: Dict[str, str],
-                    missing_logf) -> bool:
+                    missing_logf,
+                    ui_logger: Optional[Callable[[str], None]] = None) -> bool:
     """
     Load a '*_splitCycles.mat', locate & load OpenSim outputs via load_osimFile, inject per-cycle with safe labels,
     and save '*_splitCycles_osim.mat'.
@@ -344,8 +350,11 @@ def add_osim_to_mat(mat_path: Path,
     mat_stem = mat_path.stem  # includes '_splitCycles'
     core = mat_trial_core_from_name(mat_stem)
     if not core:
-        print(f"[WARN] MAT file name does not match expected pattern: {mat_path.name}")
-        missing_logf.write(f"[WARN] BAD_NAME {mat_path.name}\n")
+        msg = f"[WARN] BAD_NAME {mat_path.name}"
+        print(msg)
+        missing_logf.write(msg + "\n")
+        if ui_logger is not None:
+            ui_logger(msg)
         return False
     core_l = casefold(core)
     core_base_l = casefold(mat_trial_base_from_core(core))
@@ -438,6 +447,35 @@ def add_osim_to_mat(mat_path: Path,
 
                 win = find_aligned_window(sim_time, cycle_time, atol=TIME_ATOL, rtol=TIME_RTOL)
                 if win is None:
+                    # For SO_* keys, emit an extra [timeE] diagnostic (also to UI if provided).
+                    if key.startswith("SO_"):
+                        pt_times = cycle_time
+                        if pt_times.size > 1:
+                            dt_point = float(np.median(np.diff(pt_times)))
+                        else:
+                            dt_point = 0.0
+
+                        ex_n = int(min(3, pt_times.size, sim_time.size))
+                        pt_samples = [float(t) for t in pt_times[:ex_n]]
+                        os_samples = []
+                        if ex_n > 0:
+                            for tt in pt_times[:ex_n]:
+                                j = int(np.argmin(np.abs(sim_time - tt)))
+                                os_samples.append(float(sim_time[j]))
+                            max_diff = float(np.max(np.abs(np.array(pt_samples) - np.array(os_samples))))
+                        else:
+                            max_diff = 0.0
+
+                        msg = (
+                            f"[timeE] {key} {mat_path.name} {stride_root}.{cycle_name} :: "
+                            f"point_time={pt_samples} vs osim_time={os_samples}, "
+                            f"dt_point={dt_point}, max_diff={max_diff}"
+                        )
+                        print(msg)
+                        missing_logf.write(msg + "\n")
+                        if ui_logger is not None:
+                            ui_logger(msg)
+
                     log_missing(key, f"time alignment failed for {stride_root}.{cycle_name}")
                     continue
                 i0, i1 = win
