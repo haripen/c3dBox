@@ -167,10 +167,10 @@ dm_method = "softdtw"              # keep soft-DTW for Ward
 use_scaler = True
 
 # Optimization step (choose one mode)
-optimization_mode = "bayes"         # "grid" or "bayes"
-opt_gammas = [0.00005,0.0001]  # gamma values to scan (and to seed bayes)
-opt_k_range = (2, 3,4,5,6)            # dendrogram cuts to evaluate during optimization
-gamma_space_bounds = (2e-5, 1e-4)   # bounds for Bayesian search
+optimization_mode = "grid"         # "grid" or "bayes"
+opt_gammas = [0, 1e-2, 1]  # gamma values to scan (and to seed bayes)
+opt_k_range = (2,3,4,5,6)            # dendrogram cuts to evaluate during optimization
+gamma_space_bounds = (1e-8, 1e-4)   # bounds for Bayesian search
 clustering_mod.set_gamma_space(*gamma_space_bounds)
 
 #%% --- OPTIMIZE CLUSTERING ---
@@ -258,13 +258,6 @@ if final_labels is None:
 
 meta_final = meta.copy()
 meta_final["cluster"] = final_labels
-
-# Save final meta with chosen clusters into a dedicated *_chosen folder
-chosen_output_dir = os.path.join(root_dir, "clustering_results_chosen")
-os.makedirs(chosen_output_dir, exist_ok=True)
-meta_final_path = os.path.join(chosen_output_dir, f"{Path(dataset_path).stem}_meta_with_clusters.csv")
-meta_final.to_csv(meta_final_path, index=False)
-log(f"Chosen clustering meta saved to {meta_final_path}")
 
 # Attach cluster labels back into each source .mat file without overwriting originals.
 # Group meta by path, update all side/cycle entries per file, then save one _c copy per file.

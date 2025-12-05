@@ -458,7 +458,9 @@ def cluster_timeseries(
 
     grid_results_df = pd.DataFrame()
     bayes_results_df = pd.DataFrame()
+    bayes_trials_df = pd.DataFrame()
     bayes_best_gamma_per_k: Dict[int, float] = {}
+    summary_rows: List[Dict[str, object]] = []
 
     if grid_search.lower() == "on":
         print("\n=== Starting Grid Search ===")
@@ -541,6 +543,16 @@ def cluster_timeseries(
                         except Exception as e:  # noqa: BLE001
                             print(f"ERROR saving dendrogram: {e}")
                         plt.close(fig)
+                        _plot_cluster_traces(
+                            clustering_data=clustering_data,
+                            cluster_labels=labels,
+                            feature_names=feature_names_list,
+                            time_axis=time_axis,
+                            output_folder=output_folder,
+                            dm_method=dm_method,
+                            gamma=gamma_val,
+                            descriptor=f"grid_k{cut_k}",
+                        )
 
                     result_row = {
                         "k": cut_k,
@@ -593,13 +605,6 @@ def cluster_timeseries(
         if not grid_results_df.empty:
             print("\n=== Grid Search Complete ===")
             print(grid_results_df.to_string())
-            if excel_path:
-                try:
-                    with pd.ExcelWriter(excel_path, mode="w", engine="openpyxl") as writer:
-                        grid_results_df.to_excel(writer, sheet_name="grid_search_results", index=False)
-                    print(f"Grid search results saved to '{excel_path}' (sheet: grid_search_results)")
-                except Exception as e:  # noqa: BLE001
-                    print(f"ERROR: Could not save grid search results to Excel: {e}")
         else:
             print("\n=== Grid Search Complete (no valid results) ===")
 
@@ -609,6 +614,7 @@ def cluster_timeseries(
             "feature_names": feature_names_list,
             "bayes_results": bayes_results_df,
             "bayes_best_gamma_per_k": bayes_best_gamma_per_k,
+            "bayes_trials": bayes_trials_df,
         }
 
         # Optional Bayesian refinement using grid results as seeds (no per-step plotting)
@@ -668,27 +674,80 @@ def cluster_timeseries(
                     }
                 )
             bayes_results_df = pd.DataFrame(bayes_records)
+            bayes_trials_df = pd.DataFrame(bayes_trials)
             results_payload["bayes_results"] = bayes_results_df
             results_payload["bayes_best_gamma_per_k"] = bayes_best_gamma_per_k
+            results_payload["bayes_trials"] = bayes_trials_df
             if not bayes_results_df.empty:
                 print("\n=== BAYES OPTIMIZATION COMPLETE ===")
                 print(bayes_results_df.sort_values("k").to_string(index=False))
-                if excel_path:
-                    try:
-                        with pd.ExcelWriter(excel_path, mode="a", engine="openpyxl", if_sheet_exists="replace") as writer:
-                            bayes_results_df.sort_values("k").to_excel(writer, sheet_name="bayes_results", index=False)
-                        print(f"Bayes results saved to sheet 'bayes_results' in '{excel_path}'")
-                    except Exception as e:  # noqa: BLE001
-                        print(f"Could not save bayes_results to Excel: {e}")
-            bayes_trials_df = pd.DataFrame(bayes_trials)
-            results_payload["bayes_trials"] = bayes_trials_df
-            if excel_path and not bayes_trials_df.empty:
-                try:
-                    with pd.ExcelWriter(excel_path, mode="a", engine="openpyxl", if_sheet_exists="replace") as writer:
+        summary_columns = [
+            "step",
+            "combinations_tried",
+            "detail",
+            "Method",
+            "Scaler",
+            "Distance_Metric",
+            "Gamma_SoftDTW",
+            "Num_Clusters_Requested",
+            "Num_Clusters_Found",
+            "Silhouette_DTW",
+            "Davies_Bouldin_DTW",
+            "DTW_Distance_Time_s",
+            "Random_State",
+        ]
+        if not grid_results_df.empty:
+            summary_rows.append(
+                {
+                    "step": "grid_search",
+                    "combinations_tried": len(grid_results_df),
+                    "detail": f"agglo_k_range={list(agglo_k_range)}, gammas={gammas}",
+                    "Method": method,
+                    "Scaler": "TimeSeriesScalerMeanVariance" if use_scaler else "None",
+                    "Distance_Metric": dm_method,
+                    "Gamma_SoftDTW": np.nan,
+                    "Num_Clusters_Requested": np.nan,
+                    "Num_Clusters_Found": np.nan,
+                    "Silhouette_DTW": np.nan,
+                    "Davies_Bouldin_DTW": np.nan,
+                    "DTW_Distance_Time_s": grid_results_df["dtw_comp_time_s"].sum(),
+                    "Random_State": random_state_val,
+                }
+            )
+        if not bayes_trials_df.empty:
+            summary_rows.append(
+                {
+                    "step": "bayes_optimization",
+                    "combinations_tried": len(bayes_trials_df),
+                    "detail": f"agglo_k_range={list(agglo_k_range)}, search_space={GAMMA_SPACE}",
+                    "Method": method,
+                    "Scaler": "TimeSeriesScalerMeanVariance" if use_scaler else "None",
+                    "Distance_Metric": dm_method,
+                    "Gamma_SoftDTW": np.nan,
+                    "Num_Clusters_Requested": np.nan,
+                    "Num_Clusters_Found": np.nan,
+                    "Silhouette_DTW": np.nan,
+                    "Davies_Bouldin_DTW": np.nan,
+                    "DTW_Distance_Time_s": bayes_trials_df["dtw_comp_time_s"].sum() if "dtw_comp_time_s" in bayes_trials_df else np.nan,
+                    "Random_State": random_state_val,
+                }
+            )
+        summary_df = pd.DataFrame(summary_rows, columns=summary_columns)
+
+        if excel_path:
+            try:
+                with pd.ExcelWriter(excel_path, mode="w", engine="openpyxl") as writer:
+                    if not grid_results_df.empty:
+                        grid_results_df.to_excel(writer, sheet_name="grid_search_results", index=False)
+                    if not bayes_results_df.empty:
+                        bayes_results_df.sort_values("k").to_excel(writer, sheet_name="bayes_results", index=False)
+                    if not bayes_trials_df.empty:
                         bayes_trials_df.sort_values(["k", "gamma"]).to_excel(writer, sheet_name="bayes_opt_tried", index=False)
-                    print(f"Bayes trial table saved to sheet 'bayes_opt_tried' in '{excel_path}'")
-                except Exception as e:
-                    print(f"Could not save bayes_opt_tried to Excel: {e}")
+                    if not summary_df.empty:
+                        summary_df.to_excel(writer, sheet_name="clustering_summary", index=False)
+                print(f"Grid/Bayes results saved to '{excel_path}'")
+            except Exception as e:  # noqa: BLE001
+                print(f"ERROR: Could not save grid/bayes results to Excel: {e}")
 
         return results_payload
 
@@ -846,20 +905,46 @@ def cluster_timeseries(
 
     if excel_path:
         print(f"Saving results summary to '{excel_path}'...")
-        summary_df = pd.DataFrame(
-            {
-                "Method": [method],
-                "Scaler": ["TimeSeriesScalerMeanVariance" if use_scaler else "None"],
-                "Distance_Metric": [dm_method],
-                "Gamma_SoftDTW": [gamma if dm_method == "softdtw" else np.nan],
-                "Num_Clusters_Requested": [n_clusters],
-                "Num_Clusters_Found": [num_clusters_found],
-                "Silhouette_DTW": [metrics["silhouette_dtw"]],
-                "Davies_Bouldin_DTW": [metrics["davies_bouldin"]],
-                "DTW_Distance_Time_s": [metrics["dtw_computation_time"]],
-                "Random_State": [random_state_val],
-            }
-        )
+        summary_columns = [
+            "step",
+            "combinations_tried",
+            "detail",
+            "Method",
+            "Scaler",
+            "Distance_Metric",
+            "Gamma_SoftDTW",
+            "Num_Clusters_Requested",
+            "Num_Clusters_Found",
+            "Silhouette_DTW",
+            "Davies_Bouldin_DTW",
+            "DTW_Distance_Time_s",
+            "Random_State",
+        ]
+        summary_row = {
+            "step": "final_clustering",
+            "combinations_tried": len(agglo_k_range),
+            "detail": f"k={best_k}, gamma={gamma if dm_method=='softdtw' else 'N/A'}",
+            "Method": method,
+            "Scaler": "TimeSeriesScalerMeanVariance" if use_scaler else "None",
+            "Distance_Metric": dm_method,
+            "Gamma_SoftDTW": gamma if dm_method == "softdtw" else np.nan,
+            "Num_Clusters_Requested": n_clusters,
+            "Num_Clusters_Found": num_clusters_found,
+            "Silhouette_DTW": metrics["silhouette_dtw"],
+            "Davies_Bouldin_DTW": metrics["davies_bouldin"],
+            "DTW_Distance_Time_s": metrics["dtw_computation_time"],
+            "Random_State": random_state_val,
+        }
+        summary_df = pd.DataFrame([summary_row], columns=summary_columns)
+        if os.path.exists(excel_path):
+            try:
+                existing_summary = pd.read_excel(excel_path, sheet_name="clustering_summary")
+                missing_cols = [c for c in summary_columns if c not in existing_summary.columns]
+                for c in missing_cols:
+                    existing_summary[c] = np.nan
+                summary_df = pd.concat([existing_summary[summary_columns], summary_df], ignore_index=True)
+            except Exception:
+                pass
 
         dist_data = [{"Cluster": k, "Sample_Count": v} for k, v in metrics.get("cluster_distribution", {}).items()]
         distribution_df = pd.DataFrame(dist_data).sort_values(by="Cluster").reset_index(drop=True)
@@ -883,8 +968,11 @@ def cluster_timeseries(
         else:
             dtw_between_df = pd.DataFrame(columns=["DTW_Between_Mean", "DTW_Between_Std", "DTW_Between_Min", "DTW_Between_Max"])
 
+        writer_kwargs = {"mode": "a" if os.path.exists(excel_path) else "w", "engine": "openpyxl"}
+        if writer_kwargs["mode"] == "a":
+            writer_kwargs["if_sheet_exists"] = "replace"
         try:
-            with pd.ExcelWriter(excel_path, mode="w", engine="openpyxl") as writer:
+            with pd.ExcelWriter(excel_path, **writer_kwargs) as writer:
                 summary_df.to_excel(writer, sheet_name="clustering_summary", index=False)
                 distribution_df.to_excel(writer, sheet_name="cluster_distribution", index=False)
                 dtw_within_df.to_excel(writer, sheet_name="dtw_within_distribution", index=False)
