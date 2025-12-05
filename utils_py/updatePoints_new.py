@@ -25,7 +25,6 @@ python -m utils_py.updatePoints "D:\\Data\\root" "D:\\Data\\output"
 # or
 python updatePoints.py "D:\\Data\\root" "D:\\Data\\output"
 """
-
 import argparse
 import os
 import re
@@ -47,7 +46,15 @@ except Exception:
 
 
 CYCLE_PAT = re.compile(r"^\s*cycle\s*(\d+)\s*$", re.IGNORECASE)
-
+DEEP_MERGE_FIELDS = {
+    "IK",
+    "IK_filt",
+    "IK_markerErr",
+    "ID",
+    "SO_activation",  # already covered by "SO_", but harmless to list explicitly
+    "SO_forces",      # same here
+    "JRL",
+}
 
 def nat_key(s: str):
     """Natural sort so 'cycle2' < 'cycle10'."""
@@ -95,14 +102,29 @@ def ensure_dict(obj: Any) -> Dict[str, Any]:
 def fields_to_copy_from_cycle(base_cycle: Dict[str, Any]) -> List[str]:
     """
     Decide which top-level fields to copy from a base cycle.
-    Always includes 'point' if present, plus *all* keys that start with 'SO_'.
+
+    Always includes:
+      - 'point'                (if present; replaced wholesale)
+      - every key that starts with 'SO_'
+      - these additional blocks (deep-merged like SO_*):
+            IK, IK_filt, IK_markerErr, ID, SO_activation, SO_forces, JRL
     """
     if not isinstance(base_cycle, dict):
         return []
+
     keys: List[str] = []
+
+    # 1) point (special: replaced entirely)
     if "point" in base_cycle:
         keys.append("point")
-    keys.extend([k for k in base_cycle.keys() if isinstance(k, str) and k.startswith("SO_")])
+
+    # 2) SO_* blocks and explicitly requested deep-merge fields
+    for k in base_cycle.keys():
+        if not isinstance(k, str):
+            continue
+        if k.startswith("SO_") or k in DEEP_MERGE_FIELDS:
+            keys.append(k)
+
     # De-duplicate while preserving order
     seen = set()
     uniq = []
@@ -111,7 +133,6 @@ def fields_to_copy_from_cycle(base_cycle: Dict[str, Any]) -> List[str]:
             uniq.append(k)
             seen.add(k)
     return uniq
-
 
 def copy_cycle_fields(base_cycle: Dict[str, Any], dst_cycle: Dict[str, Any]) -> Tuple[int, Dict[str, int]]:
     """

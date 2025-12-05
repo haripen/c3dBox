@@ -1,0 +1,49 @@
+[optimize] starting cluster_timeseries optimization_mode=bayes, opt_gammas=[5e-05, 0.01, 1.0, 10], opt_k_range=(2, 3, 4)
+[optimize] opt_run keys: ['prepared_data', 'cluster_labels', 'labels_by_k', 'best_k', 'hierarchy_metrics', 'metrics', 'feature_names', 'meta', 'cluster_plots', 'distance_matrix']
+[optimize] grid_results rows: None
+[optimize] bayes_best_gamma_per_k: {}
+[optimize] bayes_results_df rows: None
+[optimize] starting cluster_timeseries optimization_mode=bayes, opt_gammas=[5e-05, 0.01, 1.0, 10], opt_k_range=(2, 3, 4)
+[optimize] opt_run keys: ['prepared_data', 'grid_search_results', 'feature_names', 'bayes_results', 'bayes_best_gamma_per_k']
+[optimize] grid_results rows: 12
+[optimize] bayes_best_gamma_per_k: {2: 5e-05, 3: 5e-05, 4: 5e-05}
+[optimize] bayes_results_df rows: 3
+[optimize] bayes_results_df content:
+   k  gamma_opt  silhouette_dtw  davies_bouldin  dtw_comp_time_s
+0  2    0.00005        0.409537        0.779383        77.934988
+1  3    0.00005        0.172690        2.231963        72.240799
+2  4    0.00005        0.193175        1.764642        70.451200
+[optimize] starting cluster_timeseries optimization_mode=bayes, opt_gammas=[2.5e-05, 5e-05], opt_k_range=(2, 4, 5)
+[optimize] starting cluster_timeseries optimization_mode=bayes, opt_gammas=[5e-05], opt_k_range=2
+[optimize] starting cluster_timeseries optimization_mode=bayes, opt_gammas=[5e-05, 0.0001], opt_k_range=(2, 3)
+[optimize] opt_run keys: ['prepared_data', 'grid_search_results', 'feature_names', 'bayes_results', 'bayes_best_gamma_per_k']
+[optimize] grid_results rows: 4
+[optimize] bayes_best_gamma_per_k: {2: 2.0000299228149215e-05, 3: 2.0000299228149215e-05}
+[optimize] bayes_results_df rows: 2
+[optimize] bayes_results_df content:
+   k  gamma_opt  silhouette_dtw  davies_bouldin  dtw_comp_time_s
+0  2    0.00002        0.409537        0.779383       100.175009
+1  3    0.00002        0.172690        2.231964        86.589640
+[optimize] bayes_results_df written to sheet 'bayes_opt_tried'
+[optimize] opt_run keys: ['prepared_data', 'grid_search_results', 'feature_names', 'bayes_results', 'bayes_best_gamma_per_k']
+[optimize] grid_results rows: 4
+[optimize] bayes_best_gamma_per_k: {2: 2.0000299228149215e-05, 3: 2.0000299228149215e-05}
+[optimize] bayes_results_df rows: 2
+[optimize] bayes_results_df content:
+   k  gamma_opt  silhouette_dtw  davies_bouldin  dtw_comp_time_s
+0  2    0.00002        0.409537        0.779383       100.175009
+1  3    0.00002        0.172690        2.231964        86.589640
+[optimize] bayes_results_df written to sheet 'bayes_results'
+[optimize] starting cluster_timeseries optimization_mode=bayes, opt_gammas=[5e-05, 0.0001], opt_k_range=(2, 3, 4, 5, 6)
+[optimize] opt_run keys: ['prepared_data', 'grid_search_results', 'feature_names', 'bayes_results', 'bayes_best_gamma_per_k', 'bayes_trials']
+[optimize] grid_results rows: 10
+[optimize] bayes_best_gamma_per_k: {2: 2.0000299228149215e-05, 3: 2.0000299228149215e-05, 4: 2.0000299228149215e-05, 5: 2.0000299228149215e-05, 6: 2.0000299228149215e-05}
+[optimize] bayes_results_df rows: 5
+[optimize] bayes_results_df content:
+   k  gamma_opt  silhouette_dtw  davies_bouldin  dtw_comp_time_s
+0  2    0.00002        0.409537        0.779383        99.390630
+1  3    0.00002        0.172690        2.231964        73.765142
+2  4    0.00002        0.193175        1.764642        78.473682
+3  5    0.00002        0.204611        1.631884        94.111254
+4  6    0.00002        0.202303        1.692142        80.659047
+[optimize] bayes_results_df written to sheet 'bayes_results'
