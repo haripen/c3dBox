@@ -18,6 +18,8 @@ import pandas as pd
 from datetime import datetime
 from collections import defaultdict  # for valid cycles stats
 from pathlib import Path
+import matplotlib.pyplot as plt
+import seaborn as sns
 from scipy.io import savemat
 # local
 from utils_py.mat2dict import loadmat_to_dict
@@ -146,9 +148,14 @@ clustering_output_dir = os.path.join(root_dir, "clustering_results")
 os.makedirs(clustering_output_dir, exist_ok=True)
 excel_path = os.path.join(clustering_output_dir, f"{Path(dataset_path).stem}_clustering.xlsx")
 # Debug log path (writeable)
-debug_log_path = Path(wd) / "Clustering" / "bayes_debug.log"
+debug_log_path = Path(wd) / "Clustering" / "debug.log"
+
+# Do you want to print and save debug information?
+debug_on = False
 
 def dbg(msg: str):
+    if not debug_on:
+        return
     with open(debug_log_path, "a", encoding="utf-8") as f:
         f.write(msg + "\n")
     print(msg)
@@ -302,4 +309,112 @@ cluster_summary = id_side_counts.groupby(["cluster", "id", "side"]).size().reset
 log("\nID/side distribution per cluster:")
 for _, row in cluster_summary.iterrows():
     log(f" cluster {row['cluster']}: ID {row['id']} {row['side']} -> {row['count']} cycles")
+
+#%% Stacked bar plot per ID/side showing cluster counts (group bars by ID; sides close together)
+if not cluster_summary.empty:
+    # ensure all ID/side combinations exist
+    side_order = ["left_stride", "right_stride"]
+    unique_ids = sorted(cluster_summary["id"].unique(), key=lambda x: int(x))
+    full_index = pd.MultiIndex.from_product([unique_ids, side_order], names=["id", "side"])
+    stacked_df = (
+        cluster_summary.pivot_table(index=["id", "side"], columns="cluster", values="count", fill_value=0)
+        .reindex(full_index, fill_value=0)
+    )
+    cluster_cols = sorted(stacked_df.columns)
+    tab10 = sns.color_palette("tab10", n_colors=10)
+    color_map_side = {"left_stride": tab10[1], "right_stride": tab10[0]}  # reddish for left, blueish for right
+    hatch_map_cluster = {0: "xx", 1: "oo", 2: "//", 3: "-", 4: "*", 5: ".", 6: "++", 7: r"\\", 8: "||"}
+
+    bar_width = 0.25
+    gap = 0.5 * bar_width  # gap between an ID's right bar and next ID's left bar
+    positions = []
+    xtick_positions = []
+    xtick_labels = []
+    for i, id_val in enumerate(unique_ids):
+        base = i * (2 * bar_width + gap)
+        left_x = base
+        right_x = base + bar_width
+        positions.extend([left_x, right_x])
+        center = base + bar_width  # middle between left and right bar
+        xtick_positions.append(center)
+        try:
+            xtick_labels.append(f"ID {int(id_val)}")
+        except Exception:
+            xtick_labels.append(f"ID {id_val}")
+
+    fig_width = max(10, len(unique_ids) * 0.35)
+    fig, ax = plt.subplots(figsize=(fig_width, 5))
+    bottoms = np.zeros(len(positions))
+    for cl in cluster_cols:
+        heights = []
+        colors = []
+        hatches = []
+        for idx in stacked_df.index:
+            heights.append(stacked_df.loc[idx, cl])
+            side = idx[1]
+            colors.append(color_map_side.get(side, tab10[0]))
+            hatches.append(hatch_map_cluster.get(cl, ""))
+        bars = ax.bar(
+            positions,
+            heights,
+            width=bar_width,
+            bottom=bottoms,
+            color=colors,
+            edgecolor="black",
+            linewidth=0.3,
+        )
+        for bar, hatch in zip(bars, hatches):
+            bar.set_hatch(hatch)
+        bottoms += np.array(heights)
+
+    ax.set_xticks(xtick_positions)
+    ax.set_xticklabels(xtick_labels, rotation=90, ha="center")
+    ax.set_ylabel("Cycle count")
+    ax.set_title(" ")
+    cluster_handles = [
+        plt.Rectangle((0, 0), 1, 1, facecolor="white", edgecolor="black", hatch=hatch_map_cluster.get(cl, ""), linewidth=0.6)
+        for cl in cluster_cols
+    ]
+    cluster_labels = [f"Cluster {cl}" for cl in cluster_cols]
+    cluster_legend = ax.legend(
+        cluster_handles,
+        cluster_labels,
+        title="Cluster",
+        loc="upper left",
+        ncol=min(len(cluster_cols), 2),
+        frameon=True,
+    )
+    side_handles = [
+        plt.Rectangle((0, 0), 1, 1, facecolor=color_map_side[s], edgecolor="black", linewidth=0.6)
+        for s in side_order
+    ]
+    side_labels = ["Left", "Right"]
+    side_legend = ax.legend(
+        side_handles,
+        side_labels,
+        title="Side",
+        loc="upper right",
+        frameon=True,
+    )
+    ax.add_artist(cluster_legend)
+    ax.add_artist(side_legend)
+
+    ax.grid(axis="y", alpha=0.3, linewidth=0.6)
+    ax.tick_params(axis="y", labelrotation=90)
+    if positions:
+        xmin = positions[0] - bar_width * 0.25
+        xmax = positions[-1] + bar_width * 1.25 + gap
+        ax.set_xlim(xmin, xmax)
+    plt.tight_layout()
+    stacked_plot_path = os.path.join(
+        clustering_output_dir, f"{Path(dataset_path).stem}_id_side_cluster_stacked.pdf"
+    )
+    try:
+        fig.savefig(stacked_plot_path, format="pdf", bbox_inches="tight")
+        log(f"ID/side stacked cluster plot saved to {stacked_plot_path}")
+    except Exception as e:
+        log(f"Failed to save stacked cluster plot: {e}")
+    plt.close(fig)
+else:
+    log("No cluster summary available to plot stacked ID/side distribution.")
 #%%
