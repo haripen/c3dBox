@@ -12,11 +12,8 @@ Step 3 — Add OpenSim Outputs to Cycle-Split MAT Files (with short labels)
   * Extracts the trial core tokens from the filename.
   * Locates expected OpenSim outputs for that trial (exact core match; fallback by core prefix).
   * Loads each output via utils_py.osim_access.load_osimFile(file_path, cols2return).
-  * Injects the columns under safe (≤63 char) field names derived from the translation dictionary (or auto-shortened).
-  * **Fix**: For SO and all keys, do NOT require time-window alignment. We set block['time']=cycle point['time']
-    and interpolate each column to those times (outside-range → NaN).
-  * **Fix**: Accept singular & plural SO file suffixes for core extraction.
-  * **Fix**: For JSON-defined columns missing from the file header, create fields filled with NaNs and log them.
+  * Aligns the OpenSim time vector (DataFrame index) to each cycle's 'point["time"]' and injects the columns
+    under safe (≤63 char) field names derived from the translation dictionary (or auto-shortened).
 - Writes the updated MAT as '*_splitCycles_osim.mat' in the same folder.
 - Logs missing/unmatched items to 'add_osim_missing.log' in the cycle-split root.
 
@@ -53,10 +50,14 @@ OSIM_JSON_NAME       = "osim_outputs.json"
 SHORTLABELS_JSONNAME = "shortlabels_osim_outputs.json"
 MISSING_LOG_NAME     = "add_osim_missing.log"
 
+# Tolerances for time alignment
+TIME_ATOL = 1e-6
+TIME_RTOL = 1e-6
+
 # Recognized filename "core" structure (from *_splitCycles.mat)
 MAT_CORE_RE = re.compile(
     r"(?i)^(?P<pid1>[A-Za-z]+\d+)_(?P<pid2>[A-Za-z]+\d+)_"
-    r"(?P<date>\d{4}-\d{2}-\d{2}-\d{2})_(?P<time>\d{2}-\d{2}-\d{2})_"
+    r"(?P<date>\d{4}-\d{2}-\d{2})_(?P<time>\d{2}-\d{2}-\d{2})_"
     r"(?P<orig>[^_]+)_"                    # original filename token (no underscores)
     r"(?P<cond>[A-Za-z][A-Za-z0-9]*\d+)"   # condition token with trailing number(s)
     r"(?P<steps>(?:_[A-Za-z0-9-]+)*)"      # optional processing steps
@@ -169,19 +170,29 @@ def to_numpy_1d(x: Any) -> np.ndarray:
 def as_matlab_column(vec: np.ndarray) -> np.ndarray:
     return np.asarray(vec, dtype=float).reshape(-1, 1)
 
-def interp_no_extrapolate(sim_t: np.ndarray, sim_y: np.ndarray, tgt_t: np.ndarray) -> np.ndarray:
-    """
-    Interpolate sim_y(sim_t) onto tgt_t; samples outside sim_t range -> NaN.
-    """
-    out = np.full(tgt_t.shape, np.nan, dtype=float)
-    if sim_t.size == 0 or sim_y.size == 0 or tgt_t.size == 0:
-        return out
-    order = np.argsort(sim_t)
-    tt = sim_t[order]
-    yy = sim_y[order]
-    mask = (tgt_t >= tt[0]) & (tgt_t <= tt[-1])
-    out[mask] = np.interp(tgt_t[mask], tt, yy)
-    return out
+def find_aligned_window(big: np.ndarray, sub: np.ndarray,
+                        atol: float = TIME_ATOL, rtol: float = TIME_RTOL) -> Optional[Tuple[int, int]]:
+    if sub.size == 0 or big.size == 0 or sub.size > big.size:
+        return None
+    if big.size == sub.size and np.allclose(big, sub, atol=atol, rtol=rtol):
+        return (0, big.size)
+    cand = np.where(np.isclose(big, sub[0], atol=atol, rtol=rtol))[0]
+    candidates = np.unique(np.concatenate([cand, cand-1, cand+1]))
+    for i0 in candidates:
+        if i0 < 0 or i0 + sub.size > big.size:
+            continue
+        window = big[i0:i0 + sub.size]
+        if np.allclose(window, sub, atol=atol, rtol=rtol):
+            return (i0, i0 + sub.size)
+    cand_start = np.where(np.isclose(big, sub[0], atol=atol, rtol=rtol))[0]
+    cand_end   = np.where(np.isclose(big, sub[-1], atol=atol, rtol=rtol))[0]
+    for i0 in cand_start:
+        i1 = i0 + sub.size - 1
+        if i1 in cand_end and i1 < big.size:
+            window = big[i0:i1 + 1]
+            if np.allclose(window, sub, atol=atol, rtol=rtol):
+                return (i0, i1 + 1)
+    return None
 
 # ---------- Header probing to avoid KeyError when columns are missing ----------
 
@@ -203,42 +214,31 @@ def probe_osim_header_columns(file_path: Path) -> List[str]:
 # ------------------------
 
 def extract_core_for_key(filename: str, key: str) -> Optional[str]:
-    """
-    Return the trial 'core' based on known prefixes/suffixes.
-    **Fix**: for SO_* allow singular and plural suffixes.
-    """
     if key not in EXTRACTORS:
         return None
     prefix, suffix, drop_ext_for_suffix = EXTRACTORS[key]
     fl = filename
     fl_low = filename.lower()
     pref_low = prefix.lower()
+    suff_low = suffix.lower()
 
     if not fl_low.startswith(pref_low):
         return None
 
-    # handle keys with extensionless extraction
     if drop_ext_for_suffix:
         stem = Path(fl).stem
-        return stem[len(prefix):]
+        core = stem[len(prefix):]
+        return core
 
-    # Allow plural/singular SO suffixes
-    if key == "SO_activation":
-        suffixes = ["_StaticOptimization_activation.sto", "_StaticOptimization_activations.sto"]
-    elif key == "SO_forces":
-        suffixes = ["_StaticOptimization_force.sto", "_StaticOptimization_forces.sto"]
+    if suff_low:
+        if not fl_low.endswith(suff_low):
+            return None
+        core = fl[len(prefix): len(fl) - len(suffix)]
+        return core
     else:
-        suffixes = [suffix]
-
-    for suff in suffixes:
-        suff_low = suff.lower()
-        if fl_low.endswith(suff_low):
-            return fl[len(prefix): len(fl) - len(suff)]
-    # For keys with no fixed suffix (e.g., IK, IK_filt) use stem
-    if suffix == "":
         stem = Path(fl).stem
-        return stem[len(prefix):]
-    return None
+        core = stem[len(prefix):]
+        return core
 
 def build_osim_index(osim_root: Path,
                      patterns: Dict[str, re.Pattern]) -> Dict[str, Dict[str, Path]]:
@@ -303,6 +303,7 @@ def make_fieldname(orig: str, translation: Dict[str, str], used: set, logf, key_
         logf.write(f"[INFO] AUTOSHORT {key_for_log} :: '{before}' -> '{candidate}'\n")
 
     # Enforce MATLAB field name constraints (alnum or '_', start with letter)
+    # Our tokens comply already, but guard against edge cases:
     if not candidate or not candidate[0].isalpha():
         candidate = "f_" + candidate
     candidate = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in candidate)
@@ -429,11 +430,17 @@ def add_osim_to_mat(mat_path: Path,
                 rec = loaded[key]
                 df = rec["df"]
 
-                # source time from DataFrame index
+                # time from DataFrame index
                 try:
                     sim_time = df.index.to_numpy(dtype=float)
                 except Exception:
                     sim_time = to_numpy_1d(df.index.to_numpy())
+
+                win = find_aligned_window(sim_time, cycle_time, atol=TIME_ATOL, rtol=TIME_RTOL)
+                if win is None:
+                    log_missing(key, f"time alignment failed for {stride_root}.{cycle_name}")
+                    continue
+                i0, i1 = win
 
                 # Build sub-struct for cycle with safe field names
                 used_names = {"time"}
@@ -445,17 +452,15 @@ def add_osim_to_mat(mat_path: Path,
                         vec = df[real_col].to_numpy(dtype=float)
                     except Exception:
                         vec = to_numpy_1d(df[real_col].to_numpy())
-
-                    seg = interp_no_extrapolate(sim_time, vec, cycle_time)
+                    seg = vec[i0:i1]
+                    if seg.size != cycle_time.size:
+                        log_missing(key, f"length mismatch for column '{json_col}' in {stride_root}.{cycle_name}")
+                        continue
 
                     safe_name = make_fieldname(json_col, translation, used_names, missing_logf, key_for_log=key)
                     block[safe_name] = as_matlab_column(seg)
 
-                # Add JSON-defined columns that were missing from the file header (fill NaN)
                 if rec["missing_cols"]:
-                    for json_col in rec["missing_cols"]:
-                        safe_name = make_fieldname(json_col, translation, used_names, missing_logf, key_for_log=key)
-                        block[safe_name] = as_matlab_column(np.full(cycle_time.shape, np.nan, dtype=float))
                     missing_logf.write(
                         f"[MISS] COLUMNS {key} {mat_path.name} {stride_root}.{cycle_name} :: "
                         f"missing={','.join(rec['missing_cols'])}\n"
