@@ -66,10 +66,11 @@ def extract_knee_jrl_data(jrl_dict, side, bw):
         kjrl_df[f"{base_cols[0]}_resultant"] /
         (kjrl_df[f"{base_cols[0]}_resultant"]+kjrl_df[f"{base_cols[1]}_resultant"]) * 100
     )
-    kjrl_df[f"total_{side}_resultant_force"] = (
+    kjrl_df[f"total_{side}_resultant_tibfem_force"] = (
         kjrl_df[f"{base_cols[0]}_resultant"] +
         kjrl_df[f"{base_cols[1]}_resultant"]
     )
+    kjrl_df.drop(columns=[f"{base_cols[0]}_resultant",f"{base_cols[1]}_resultant"],inplace=True)
     akima = Akima1DInterpolator(np.linspace(0, 100, kjrl_df.shape[0]), kjrl_df.values, axis=0)
     kjrl_df = pd.DataFrame(akima(np.linspace(0, 100, 101)), columns=kjrl_df.columns)
     return kjrl_df

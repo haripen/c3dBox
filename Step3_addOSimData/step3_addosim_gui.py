@@ -83,7 +83,14 @@ class AddOsimWorker(QtCore.QObject):
                         self.log.emit("[INFO] Cancellation requested. Stopping…")
                         break
                     self.log.emit(f"[RUN ] {i}/{total}  {mat_file.name}")
-                    ok = engine.add_osim_to_mat(mat_file, osim_index, osim_cfg, translation, logf)
+                    ok = engine.add_osim_to_mat(
+                        mat_file,
+                        osim_index,
+                        osim_cfg,
+                        translation,
+                        logf,
+                        ui_logger=self.log.emit,  # only [timeE] uses this
+                    )
                     success += int(ok)
                     self.progress.emit(i, total)
 
