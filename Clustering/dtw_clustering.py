@@ -4,11 +4,15 @@ Created on Fri Oct 17 19:11:12 2025
 
 @author: harald.penasso
 """
+# ENV notes
+# you may have to pip uninstall --user PySide6 shiboken6
 #%% --- SETUP ---
 import os
-wd  = r"C:\GitHub\c3dBox" # the local path to c3dBox
+# wd  = r"C:\GitHub\c3dBox" # the local path to c3dBox
+wd  = r"D:\Git\c3dBox" # the local path to c3dBox
 os.chdir(wd)
-root_dir = r"C:\Data_Local\PRO_checked_mat"
+# root_dir = r"C:\Data_Local\PRO_checked_mat"
+root_dir = r"D:\Data_Local\PRO_checked_mat"
 g = 9.81
 rms_fy_threshold_pc = 0.05
 max_fy_threshold_pc = 0.1
@@ -18,14 +22,16 @@ import pandas as pd
 from datetime import datetime
 from collections import defaultdict  # for valid cycles stats
 from pathlib import Path
+import matplotlib
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.io import savemat
 # local
-from utils_py.mat2dict import loadmat_to_dict
-from utils_py.access_mat import find_files, extract_knee_jrl_data
-from Clustering import clustering as clustering_mod
-from Clustering.clustering import cluster_timeseries#, optimize_gamma_for_k
+from ..utils_py.mat2dict import loadmat_to_dict
+from ..utils_py.access_mat import find_files, extract_knee_jrl_data
+from . import clustering as clustering_mod
+from .clustering import cluster_timeseries  #, optimize_gamma_for_k
 
 # Simple logger that prints and stores lines
 log_lines = []

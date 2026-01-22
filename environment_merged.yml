@@ -16,6 +16,8 @@ dependencies:
   - h5py>=3.9
   - scikit-optimize
   - tslearn
+  - seaborn
+  - openpyxl
   - spyder
   - pip
   - pip:

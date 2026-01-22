@@ -19,6 +19,12 @@ except Exception:
     from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
     from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
+if __name__ == "__main__" and __package__ is None:
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    __package__ = "Step4_check"
+
 from .file_index import scan_root, build_indices, FileMeta
 from .io_mat import load_dict, save_dict_check
 from .selection import SelectionManager, SelectionItem

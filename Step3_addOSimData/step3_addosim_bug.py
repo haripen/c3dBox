@@ -59,7 +59,7 @@ MAT_CORE_RE = re.compile(
     r"(?i)^(?P<pid1>[A-Za-z]+\d+)_(?P<pid2>[A-Za-z]+\d+)_"
     r"(?P<date>\d{4}-\d{2}-\d{2})_(?P<time>\d{2}-\d{2}-\d{2})_"
     r"(?P<orig>[^_]+)_"                    # original filename token (no underscores)
-    r"(?P<cond>[A-Za-z][A-Za-z0-9]*\d+)"   # condition token with trailing number(s)
+    r"(?P<cond>[A-Za-z][A-Za-z0-9]*)"      # condition token (letters/digits, digits optional)
     r"(?P<steps>(?:_[A-Za-z0-9-]+)*)"      # optional processing steps
     r"_splitCycles$",
     re.IGNORECASE
@@ -139,7 +139,7 @@ def mat_trial_base_from_core(core: str) -> str:
     m = re.match(
         r"(?i)^(?P<pid1>[A-Za-z]+\d+)_(?P<pid2>[A-Za-z]+\d+)_"
         r"(?P<date>\d{4}-\d{2}-\d{2})_(?P<time>\d{2}-\d{2}-\d{2})_"
-        r"(?P<orig>[^_]+)_(?P<cond>[A-Za-z][A-Za-z0-9]*\d+)"
+        r"(?P<orig>[^_]+)_(?P<cond>[A-Za-z][A-Za-z0-9]*)"
         r"(?:_[A-Za-z0-9-]+)*$", core, flags=re.IGNORECASE
     )
     if not m:
@@ -329,7 +329,8 @@ def add_osim_to_mat(mat_path: Path,
                     osim_index: Dict[str, Dict[str, Path]],
                     osim_cfg: Dict[str, Any],
                     translation: Dict[str, str],
-                    missing_logf) -> bool:
+                    missing_logf,
+                    ui_logger=None) -> bool:
     """
     Load a '*_splitCycles.mat', locate & load OpenSim outputs via load_osimFile, inject per-cycle with safe labels,
     and save '*_splitCycles_osim.mat'.
