@@ -1,0 +1,27 @@
+{"sid": "Rd0012 Rd0012", "label": "EMG.EMG_18_L M.peroneus long.", "candidate": "EMG.EMG_02_R M.peroneus long.", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0035 Rd0035", "label": "EMG.EMG_24_L M.biceps femoris", "candidate": "EMG.EMG_12_R M.biceps femoris", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0036 Rd0036", "label": "EMG.EMG_07_R M.gluteus maximus", "candidate": "EMG.EMG_31_L M.gluteus maximus", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0036 Rd0036", "label": "EMG.EMG_31_L M.gluteus maximus", "candidate": "EMG.EMG_07_R M.gluteus maximus", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0039 Rd0039", "label": "EMG.EMG_13_R M.erector spine", "candidate": "EMG.EMG_27_L M.erector spine", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0039 Rd0039", "label": "EMG.EMG_27_L M.erector spine", "candidate": "EMG.EMG_13_R M.erector spine", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0040 Rd0040", "label": "EMG.EMG_26_L M.rectus fem.", "candidate": "EMG.EMG_06_R M.rectus fem.", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0059 Rd0059", "label": "EMG.EMG_02_R M.peroneus long.", "candidate": "EMG.EMG_18_L M.peroneus long.", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0070 Rd0070", "label": "EMG.EMG_06_R M.rectus fem.", "candidate": "EMG.EMG_09_R M.vastus lat.", "reason": "suggest_close", "response": "ok"}
+{"sid": "Rd0074 Rd0074", "label": "EMG.EMG_31_L M.gluteus maximus", "candidate": "EMG.EMG_17_L M.tibialis anterior", "reason": "suggest_general", "response": "ok"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_03_R M.gastro. lat.", "candidate": "EMG.EMG_19_L M.gastro. lat.", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_04_R M.gastroc.med.", "candidate": "EMG.EMG_20_L M.gastroc.med.", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_05_R M.soleus", "candidate": "EMG.EMG_25_L M.soleus", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_06_R M.rectus fem.", "candidate": "EMG.EMG_26_L M.rectus fem.", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_08_R M. gluteus medius", "candidate": "EMG.EMG_32_L M. gluteus medius", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_09_R M.vastus lat.", "candidate": "EMG.EMG_21_L M.vastus lat.", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_10_R M.vastus med.", "candidate": "EMG.EMG_22_L M.vastus med.", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_11_R M.semitendinosus", "candidate": "EMG.EMG_23_L M.semitendinosus", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_12_R M.biceps femoris", "candidate": "EMG.EMG_24_L M.biceps femoris", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_17_L M.tibialis anterior", "candidate": "EMG.EMG_01_R M.tibialis anterior", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_19_L M.gastro. lat.", "candidate": "EMG.EMG_03_R M.gastro. lat.", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_20_L M.gastroc.med.", "candidate": "EMG.EMG_04_R M.gastroc.med.", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_22_L M.vastus med.", "candidate": "EMG.EMG_10_R M.vastus med.", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_23_L M.semitendinosus", "candidate": "EMG.EMG_11_R M.semitendinosus", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_25_L M.soleus", "candidate": "EMG.EMG_05_R M.soleus", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0079 Rd0079", "label": "EMG.EMG_32_L M. gluteus medius", "candidate": "EMG.EMG_08_R M. gluteus medius", "reason": "suggest_lr", "response": "swap"}
+{"sid": "Rd0045 Rd0045", "label": "EMG.EMG_06_R M.rectus fem.", "candidate": "EMG.EMG_10_R M.vastus med.", "reason": "unsure_ci", "response": "ok"}
