@@ -1,0 +1,64 @@
+{
+  "Rd0012 Rd0012": {
+    "EMG.EMG_18_L M.peroneus long.": "EMG.EMG_02_R M.peroneus long."
+  },
+  "Rd0036 Rd0036": {
+    "EMG.EMG_07_R M.gluteus maximus": "EMG.EMG_31_L M.gluteus maximus"
+  },
+  "Rd0039 Rd0039": {
+    "EMG.EMG_27_L M.erector spine": "EMG.EMG_13_R M.erector spine"
+  },
+  "Rd0040 Rd0040": {
+    "EMG.EMG_26_L M.rectus fem.": "EMG.EMG_06_R M.rectus fem."
+  },
+  "Rd0043 Rd0043": {
+    "EMG.EMG_13_R M.erector spine": "EMG.EMG_27_L M.erector spine"
+  },
+  "Rd0059 Rd0059": {
+    "EMG.EMG_02_R M.peroneus long.": "EMG.EMG_18_L M.peroneus long.",
+    "EMG.EMG_07_R M.gluteus maximus": "EMG.EMG_31_L M.gluteus maximus"
+  },
+  "Rd0070 Rd0070": {
+    "EMG.EMG_06_R M.rectus fem.": "EMG.EMG_09_R M.vastus lat."
+  },
+  "Rd0072 Rd0072": {
+    "EMG.EMG_08_R M. gluteus medius": "EMG.EMG_32_L M. gluteus medius"
+  },
+  "Rd0079 Rd0079": {
+    "EMG.EMG_03_R M.gastro. lat.": "EMG.EMG_19_L M.gastro. lat.",
+    "EMG.EMG_04_R M.gastroc.med.": "EMG.EMG_20_L M.gastroc.med.",
+    "EMG.EMG_05_R M.soleus": "EMG.EMG_25_L M.soleus",
+    "EMG.EMG_06_R M.rectus fem.": "EMG.EMG_26_L M.rectus fem.",
+    "EMG.EMG_09_R M.vastus lat.": "EMG.EMG_21_L M.vastus lat.",
+    "EMG.EMG_10_R M.vastus med.": "EMG.EMG_22_L M.vastus med.",
+    "EMG.EMG_11_R M.semitendinosus": "EMG.EMG_23_L M.semitendinosus",
+    "EMG.EMG_12_R M.biceps femoris": "EMG.EMG_24_L M.biceps femoris",
+    "EMG.EMG_17_L M.tibialis anterior": "EMG.EMG_01_R M.tibialis anterior",
+    "EMG.EMG_32_L M. gluteus medius": "EMG.EMG_08_R M. gluteus medius",
+    "EMG.EMG_13_R M.erector spine": "EMG.EMG_27_L M.erector spine"
+  },
+  "Rd0001 Rd0001": {
+    "EMG.EMG_13_R M.erector spine": "EMG.EMG_27_L M.erector spine"
+  },
+  "Rd0052 Rd0052": {
+    "EMG.EMG_18_L M.peroneus long.": "EMG.EMG_31_L M.gluteus maximus",
+    "EMG.EMG_27_L M.erector spine": "EMG.EMG_13_R M.erector spine"
+  },
+  "Rd0061 Rd0061": {
+    "EMG.EMG_31_L M.gluteus maximus": "EMG.EMG_07_R M.gluteus maximus"
+  },
+  "Rd71 Rd71": {
+    "EMG.EMG_02_R M.peroneus long.": "EMG.EMG_18_L M.peroneus long."
+  },
+  "Rd0074 Rd0074": {
+    "EMG.EMG_21_L M.vastus lat.": "EMG.EMG_26_L M.rectus fem.",
+    "EMG.EMG_27_L M.erector spine": "EMG.EMG_13_R M.erector spine"
+  },
+  "Rd0024 Rd0024": {
+    "EMG.EMG_06_R M.rectus fem.": "EMG.EMG_26_L M.rectus fem.",
+    "EMG.EMG_23_L M.semitendinosus": "EMG.EMG_21_L M.vastus lat."
+  },
+  "Rd0035 Rd0035": {
+    "EMG.EMG_12_R M.biceps femoris": "EMG.EMG_24_L M.biceps femoris"
+  }
+}

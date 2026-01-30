@@ -72,6 +72,12 @@ python .\Step0_patchC3Dlabels\fixEMGmisplacement_cli.py --task walk --apply --ap
 
 # Skip plots (faster)
 --no-plots
+
+# Parallel workers for C3D processing (default: 20)
+--processes 20
+
+# Apply an existing mapping.json (in place, task-filtered)
+python .\Step0_patchC3Dlabels\diagnostics\apply_mapping_json.py --task walk --mapping .\Step0_patchC3Dlabels\outputs\fixEMG_walk_YYYYMMDD_HHMMSS\mapping.json
 ```
 
 ---
@@ -150,6 +156,11 @@ Applies mapping, pools left/right per muscle, bootstraps PCA dim1 stats, and plo
 
 ```powershell
 python .\Step0_patchC3Dlabels\diagnostics\bootstrapped_global_muscle_stats.py --task walk --run-dir .\Step0_patchC3Dlabels\outputs\fixEMG_walk_YYYYMMDD_HHMMSS --bootstrap 10000 --processes 20
+```
+
+Optional outlier tuning:
+```powershell
+python .\Step0_patchC3Dlabels\diagnostics\bootstrapped_global_muscle_stats.py --task walk --run-dir .\Step0_patchC3Dlabels\outputs\fixEMG_walk_YYYYMMDD_HHMMSS --outlier-quantile 0.05 --outlier-top-frac 0.05
 ```
 
 Outputs:

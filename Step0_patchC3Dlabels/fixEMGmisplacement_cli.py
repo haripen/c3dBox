@@ -15,6 +15,7 @@ import shutil
 import sys
 import time
 from collections import defaultdict
+from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
 import numpy as np
@@ -238,6 +239,12 @@ def parse_args():
         "--no-plots",
         action="store_true",
         help="Skip generating plots (not recommended).",
+    )
+    p.add_argument(
+        "--processes",
+        type=int,
+        default=20,
+        help="Number of parallel processes for C3D processing.",
     )
     p.add_argument(
         "--debug",
@@ -608,21 +615,119 @@ def ensure_dir(p: Path):
     p.mkdir(parents=True, exist_ok=True)
 
 
-class ProgressBar:
-    def __init__(self, label, total, every_pct=10):
-        self.label = label
-        self.total = max(1, int(total))
-        self.every_pct = max(1, int(every_pct))
-        self.last_pct = -1
+def process_c3d_worker(args):
+    c3d_path, emg_map, params = args
+    result = {
+        "processed": 0,
+        "subject_id": None,
+        "file": str(c3d_path),
+        "cycles": {},
+        "snr": {},
+        "label_sets": {},
+        "channel_info": {},
+        "mismatch": [],
+    }
+    desc = parse_enf_description(c3d_path)
+    if desc is None or not match_task(desc, params["task"]):
+        return result
+    try:
+        c3d = ezc3d.c3d(str(c3d_path))
+    except Exception:
+        return result
 
-    def update(self, current):
-        pct = int((current / self.total) * 100)
-        if pct >= 100 or (pct % self.every_pct == 0 and pct != self.last_pct):
-            bar_len = 20
-            filled = int(round(bar_len * pct / 100))
-            bar = "#" * filled + "-" * (bar_len - filled)
-            print(f"[progress] {self.label}: [{bar}] {pct}%")
-            self.last_pct = pct
+    subject_id = get_subject_id(c3d)
+    times, labels, contexts = extract_event_times(c3d)
+    if len(times) == 0:
+        return result
+    data, rate = analog_matrix(c3d)
+    analog_time = analog_time_vector(c3d, data.shape[0])
+    analog_labels = list(c3d["parameters"]["ANALOG"]["LABELS"]["value"])
+    emg_infos = build_emg_label_list(analog_labels)
+
+    left_strikes = get_foot_strike_times(times, labels, contexts, "Left")
+    right_strikes = get_foot_strike_times(times, labels, contexts, "Right")
+    if len(left_strikes) < 2 and len(right_strikes) < 2:
+        return result
+
+    result["processed"] = 1
+    result["subject_id"] = subject_id
+
+    for info in emg_infos:
+        if info.get("is_nfu"):
+            continue
+        if not info.get("side"):
+            continue
+        emg_num = info.get("emg_num")
+        label = info.get("label")
+        emg_key = f"emg#{emg_num}"
+        if emg_key in emg_map:
+            expected = emg_map.get(emg_key)
+            if expected != label:
+                result["mismatch"].append((emg_key, label, expected))
+        result["label_sets"].setdefault(emg_num, set()).add(label)
+        result["channel_info"][label] = info
+
+        strikes = left_strikes if info["side"] == "L" else right_strikes
+        if len(strikes) < 2:
+            continue
+        idx = info["index"]
+        cycles = []
+        snrs = []
+        full_env = None
+        try:
+            full_raw = data[:, idx]
+            full_env = process_emg_segment(
+                full_raw,
+                rate,
+                params["bandpass"][0],
+                params["bandpass"][1],
+                params["lowpass"],
+                method=params["emg_method"],
+            )
+        except Exception:
+            full_env = None
+        for s0, s1 in zip(strikes[:-1], strikes[1:]):
+            if s1 <= s0:
+                continue
+            i0 = int(np.searchsorted(analog_time, s0, side="left"))
+            i1 = int(np.searchsorted(analog_time, s1, side="right"))
+            i0 = max(0, i0)
+            i1 = min(data.shape[0], i1)
+            if i1 <= i0:
+                continue
+            if i1 - i0 < params["min_cycle_samples"]:
+                continue
+            if full_env is not None:
+                env = full_env[i0:i1]
+            else:
+                seg = data[i0:i1, idx]
+                try:
+                    env = process_emg_segment(
+                        seg,
+                        rate,
+                        params["bandpass"][0],
+                        params["bandpass"][1],
+                        params["lowpass"],
+                        method=params["emg_method"],
+                    )
+                except Exception:
+                    continue
+            if env is None or env.size < 5:
+                continue
+            env_norm = time_normalize(env, n=101)
+            if env_norm is None:
+                continue
+            cycles.append(env_norm)
+            snrs.append(cycle_snr(env_norm))
+        if cycles:
+            result["cycles"].setdefault(label, []).extend(cycles)
+            if snrs:
+                result["snr"][label] = float(np.nanmedian(snrs))
+
+    # convert label_sets to lists for pickling safety
+    result["label_sets"] = {k: list(v) for k, v in result["label_sets"].items()}
+    return result
+
 
 def plot_within_id(
     out_path,
@@ -923,19 +1028,10 @@ def main():
 
     log(f"[scan] found {len(c3ds)} C3D files", log_lines)
 
-    # Data containers
-    id_channels = defaultdict(lambda: defaultdict(list))  # id -> label -> list of cycles
-    id_cycle_snr = defaultdict(dict)  # id -> label -> snr
-    id_label_sets = defaultdict(lambda: defaultdict(set))  # id -> emg_num -> set(labels)
-    id_channel_info = defaultdict(dict)  # id -> label -> info
-    id_files = defaultdict(set)
-    mismatch_warned = set()
-
+    # Pre-filter by task using .enf
     skipped_no_enf = 0
     skipped_no_task = 0
-    processed_files = 0
-
-    matched_count = 0
+    matched = []
     for c3d_path in c3ds:
         desc = parse_enf_description(c3d_path)
         if desc is None:
@@ -944,114 +1040,62 @@ def main():
         if not match_task(desc, args.task):
             skipped_no_task += 1
             continue
-        if args.max_files and matched_count >= args.max_files:
+        matched.append(c3d_path)
+        if args.max_files and len(matched) >= args.max_files:
             break
-        try:
-            c3d = ezc3d.c3d(str(c3d_path))
-        except Exception as exc:
-            log(f"[warn] failed to read {c3d_path}: {exc}", log_lines)
+
+    # Data containers
+    id_channels = defaultdict(lambda: defaultdict(list))  # id -> label -> list of cycles
+    id_cycle_snr = defaultdict(dict)  # id -> label -> snr list
+    id_label_sets = defaultdict(lambda: defaultdict(set))  # id -> emg_num -> set(labels)
+    id_channel_info = defaultdict(dict)  # id -> label -> info
+    id_files = defaultdict(set)
+    mismatch_warned = set()
+    processed_files = 0
+
+    params = {
+        "task": args.task,
+        "emg_method": args.emg_method,
+        "bandpass": args.bandpass,
+        "lowpass": args.lowpass,
+        "min_cycle_samples": args.min_cycle_samples,
+    }
+    n_proc = min(max(1, args.processes), cpu_count())
+    jobs = [(p, emg_map, params) for p in matched]
+    if n_proc > 1:
+        with Pool(processes=n_proc) as pool:
+            results = pool.map(process_c3d_worker, jobs)
+    else:
+        results = [process_c3d_worker(j) for j in jobs]
+
+    for res in results:
+        for emg_key, label, expected in res.get("mismatch", []):
+            key = (emg_key, label)
+            if key not in mismatch_warned:
+                log(f"[warn] label mismatch {emg_key}: '{label}' != '{expected}'", log_lines)
+                mismatch_warned.add(key)
+        if not res.get("processed"):
             continue
-
-        subject_id = get_subject_id(c3d)
-        times, labels, contexts = extract_event_times(c3d)
-        if len(times) == 0:
-            log(f"[warn] no events in {c3d_path}", log_lines)
-            continue
-
-        data, rate = analog_matrix(c3d)
-        analog_time = analog_time_vector(c3d, data.shape[0])
-        analog_labels = list(c3d["parameters"]["ANALOG"]["LABELS"]["value"])
-        emg_infos = build_emg_label_list(analog_labels)
-
-        # Collect strike times per side
-        left_strikes = get_foot_strike_times(times, labels, contexts, "Left")
-        right_strikes = get_foot_strike_times(times, labels, contexts, "Right")
-        if len(left_strikes) < 2 and len(right_strikes) < 2:
-            log(f"[warn] insufficient foot strikes in {c3d_path}", log_lines)
-            continue
-
         processed_files += 1
-        matched_count += 1
-        id_files[subject_id].add(str(c3d_path))
-
-        for info in emg_infos:
-            if info.get("is_nfu"):
-                continue
-            if not info.get("side"):
-                continue
-            emg_num = info.get("emg_num")
-            label = info.get("label")
-            emg_key = f"emg#{emg_num}"
-            if emg_key in emg_map:
-                expected = emg_map.get(emg_key)
-                if expected != label:
-                    key = (emg_key, label)
-                    if key not in mismatch_warned:
-                        log(f"[warn] label mismatch {emg_key}: '{label}' != '{expected}'", log_lines)
-                        mismatch_warned.add(key)
-            id_label_sets[subject_id][emg_num].add(label)
-            id_channel_info[subject_id][label] = info
-
-            strikes = left_strikes if info["side"] == "L" else right_strikes
-            if len(strikes) < 2:
-                continue
-            idx = info["index"]
-            cycles = []
-            snrs = []
-            for s0, s1 in zip(strikes[:-1], strikes[1:]):
-                if s1 <= s0:
-                    continue
-                i0 = int(np.searchsorted(analog_time, s0, side="left"))
-                i1 = int(np.searchsorted(analog_time, s1, side="right"))
-                i0 = max(0, i0)
-                i1 = min(data.shape[0], i1)
-                if i1 <= i0:
-                    continue
-                if i1 - i0 < args.min_cycle_samples:
-                    continue
-                seg = data[i0:i1, idx]
-                try:
-                    env = process_emg_segment(
-                        seg,
-                        rate,
-                        args.bandpass[0],
-                        args.bandpass[1],
-                        args.lowpass,
-                        method=args.emg_method,
-                    )
-                except Exception:
-                    continue
-                if env is None or env.size < 5:
-                    continue
-                env_norm = time_normalize(env, n=101)
-                if env_norm is None:
-                    continue
-                cycles.append(env_norm)
-                snrs.append(cycle_snr(env_norm))
-
-            if cycles:
-                id_channels[subject_id][label].extend(cycles)
-                if snrs:
-                    # Keep median SNR across cycles per file; later combine by median across files
-                    snr_med = float(np.nanmedian(snrs))
-                    prev = id_cycle_snr[subject_id].get(label, [])
-                    prev = prev if isinstance(prev, list) else [prev]
-                    prev.append(snr_med)
-                    id_cycle_snr[subject_id][label] = prev
+        sid = res.get("subject_id")
+        if not sid:
+            continue
+        id_files[sid].add(res.get("file"))
+        for label, cycles in res.get("cycles", {}).items():
+            id_channels[sid][label].extend(cycles)
+        for label, snr in res.get("snr", {}).items():
+            prev = id_cycle_snr[sid].get(label, [])
+            prev = prev if isinstance(prev, list) else [prev]
+            prev.append(snr)
+            id_cycle_snr[sid][label] = prev
+        for emg_num, labs in res.get("label_sets", {}).items():
+            id_label_sets[sid][emg_num].update(labs)
+        for label, info in res.get("channel_info", {}).items():
+            id_channel_info[sid][label] = info
 
     log(f"[scan] processed files: {processed_files}", log_lines)
     log(f"[scan] skipped (no .enf): {skipped_no_enf}", log_lines)
     log(f"[scan] skipped (task mismatch): {skipped_no_task}", log_lines)
-
-    # Progress bar 1: trace computation and threshold prep
-    n_items = sum(
-        1
-        for sid, ch_dict in id_channels.items()
-        for label, cycles in ch_dict.items()
-        if len(cycles) >= args.min_cycles
-    )
-    pb1 = ProgressBar("compute traces", total=max(1, n_items * 2))
-    pb1_step = 0
 
     # Check label consistency per ID/emg#
     inconsistent = []
@@ -1114,8 +1158,6 @@ def main():
                 "corr_mean": float(np.nanmean(corr_list)) if corr_list else np.nan,
                 "lag_mean": float(np.nanmean(lag_list)) if lag_list else np.nan,
             }
-            pb1_step += 1
-            pb1.update(pb1_step)
 
     # Homogeneity test: flag outlier cycles (low corr to ID trace)
     within_corr_low = compute_thresholds(cycle_corrs_all, mode="lower", quantile=0.025)
@@ -1180,8 +1222,6 @@ def main():
                 "early_late_lag": float(early_late_lag) if np.isfinite(early_late_lag) else np.nan,
                 "homogeneity_flag": bool(homogeneity_flag),
             }
-            pb1_step += 1
-            pb1.update(pb1_step)
 
     # Build global traces by label
     label_id_traces = defaultdict(list)
@@ -1383,13 +1423,6 @@ def main():
     for (sid, label), st in status.items():
         log(f"  {sid}::{label}: {st}", log_lines, also_print=False)
 
-    # Progress bar 2: validation, plots, remap, mapping write
-    remap_candidates = [k for k, st in status.items() if st.startswith("flagged")]
-    plot_count = (len(label_id_traces) + len(status) + len(remap_candidates)) if not args.no_plots else 0
-    total_pb2 = plot_count + len(remap_candidates)
-    pb2 = ProgressBar("remap+plots", total=max(1, total_pb2))
-    pb2_step = 0
-
     # Log summaries
     log(f"[summary] total IDs processed: {total_ids}", log_lines, also_print=False)
     log("[summary] global_label_summary (per label):", log_lines, also_print=False)
@@ -1436,8 +1469,6 @@ def main():
                 len(traces),
                 total_ids,
             )
-            pb2_step += 1
-            pb2.update(pb2_step)
 
         # Per ID/channel plots
         for (sid, label), st in status.items():
@@ -1479,7 +1510,7 @@ def main():
                 within.get("n_cycles", 0),
                 within.get("n_outliers", 0),
                 len(label_id_traces.get(label, [])),
-                total_ids,
+                len(label_id_raw_ids.get(label, set())) or total_ids,
                 within.get("corr_med", np.nan),
                 within.get("lag_med", np.nan),
                 within.get("lag_abs_med", np.nan),
@@ -1494,8 +1525,6 @@ def main():
                     f"{'ok' if st == 'validated' else 'remap'}"
                 ),
             )
-            pb2_step += 1
-            pb2.update(pb2_step)
 
     # Remapping step (MAD-based suggestions)
     mapping = defaultdict(dict)
@@ -1653,8 +1682,6 @@ def main():
             else:
                 reason = "low_snr" if low_snr_flag else "ci"
                 remap_results[(sid, label)] = (f"unsure_{reason}", None, (base_mad,))
-        pb2_step += 1
-        pb2.update(pb2_step)
 
     log("[summary] remap_suggestions (per ID/label):", log_lines, also_print=False)
     for (sid, label), (st, target, stats) in remap_results.items():
@@ -1778,7 +1805,7 @@ def main():
                 within.get("n_cycles", 0),
                 within.get("n_outliers", 0),
                 len(label_id_traces.get(used_label, [])),
-                total_ids,
+                len(label_id_raw_ids.get(used_label, set())) or total_ids,
                 within.get("corr_med", np.nan),
                 within.get("lag_med", np.nan),
                 within.get("lag_abs_med", np.nan),
@@ -1873,8 +1900,6 @@ def main():
                     if rec["sid"] in mapping and rec["label"] in mapping[rec["sid"]]:
                         del mapping[rec["sid"]][rec["label"]]
                     remap_results[(rec["sid"], rec["label"])] = ("user_keep", None, None)
-            pb2_step += 1
-            pb2.update(pb2_step)
 
     # Normalize reciprocal swaps to single entries
     mapping = normalize_mapping_pairs(mapping)

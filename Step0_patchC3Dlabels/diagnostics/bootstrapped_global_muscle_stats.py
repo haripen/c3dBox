@@ -42,6 +42,18 @@ def parse_args():
     p.add_argument("--min-cycles", type=int, default=3)
     p.add_argument("--min-cycle-samples", type=int, default=50)
     p.add_argument("--within-lag-max", type=int, default=5)
+    p.add_argument(
+        "--outlier-quantile",
+        type=float,
+        default=0.05,
+        help="Quantile for corr low / mad high outlier detection (e.g., 0.05).",
+    )
+    p.add_argument(
+        "--outlier-top-frac",
+        type=float,
+        default=0.05,
+        help="Top fraction by dissimilarity to mark as outliers.",
+    )
     return p.parse_args()
 
 
@@ -179,6 +191,19 @@ def main():
             if len(strikes) < 2:
                 continue
             idx = info["index"]
+            try:
+                full_env = fx.process_emg_segment(
+                    data[:, idx],
+                    rate,
+                    args.bandpass[0],
+                    args.bandpass[1],
+                    args.lowpass,
+                    method=args.emg_method,
+                )
+            except Exception:
+                full_env = None
+            if full_env is None or full_env.size < 5:
+                continue
             cycles = []
             for s0, s1 in zip(strikes[:-1], strikes[1:]):
                 if s1 <= s0:
@@ -191,18 +216,7 @@ def main():
                     continue
                 if i1 - i0 < args.min_cycle_samples:
                     continue
-                seg = data[i0:i1, idx]
-                try:
-                    env = fx.process_emg_segment(
-                        seg,
-                        rate,
-                        args.bandpass[0],
-                        args.bandpass[1],
-                        args.lowpass,
-                        method=args.emg_method,
-                    )
-                except Exception:
-                    continue
+                env = full_env[i0:i1]
                 if env is None or env.size < 5:
                     continue
                 env_norm = fx.time_normalize(env, n=101)
@@ -256,6 +270,7 @@ def main():
     # Pool L/R per muscle (mapped labels)
     muscle_traces = defaultdict(list)
     muscle_traces_side = defaultdict(lambda: defaultdict(list))
+    muscle_meta = defaultdict(list)  # list of dicts with sid/label/side/trace
     muscle_ids = defaultdict(set)
     muscle_ids_side = defaultdict(lambda: defaultdict(set))
     for sid, ch_dict in mapped_traces.items():
@@ -264,6 +279,7 @@ def main():
             canon = fx.canonical_muscle(info.get("muscle_key", ""))
             side = info.get("side", "")
             muscle_traces[canon].append(trace)
+            muscle_meta[canon].append({"sid": sid, "label": label, "side": side, "trace": trace})
             muscle_ids[canon].add(sid)
             if side in ("L", "R"):
                 muscle_traces_side[canon][side].append(trace)
@@ -303,6 +319,7 @@ def main():
             "amplitude_norm": "per-ID channel: mean+3*SD",
             "outlier_removal": "within-cycle corr < lower 2.5% across all cycles",
             "agg_method": "PCA dim1 (SVD, sign aligned to mean)",
+            "id_trace_method": "PCA dim1 (SVD) per ID/channel, then remapped by mapping.json",
             "bootstrap": n_boot,
             "processes": n_proc,
             "elapsed_sec": round(elapsed, 2),
@@ -319,11 +336,7 @@ def main():
         stats["n_traces_right"] = int(len(muscle_traces_side[muscle].get("R", [])))
         out["muscles"][muscle] = stats
 
-    out_path = out_dir / f"global_muscle_stats_{fx.safe_slug(args.task)}.json"
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=2)
-
-    # Plots: pooled mean + SD, side means
+    # Plots: pooled PCA dim1 + SD, side PCA means
     plot_dir = out_dir / "plots"
     fx.ensure_dir(plot_dir)
     for muscle in muscles:
@@ -331,31 +344,91 @@ def main():
         if not traces:
             continue
         X = np.asarray(traces)
-        mean = np.mean(X, axis=0)
+        pooled_pca = fx.aggregate_cycles(traces, "pca")
         sd = np.std(X, axis=0)
         mean_l = None
         mean_r = None
         if muscle_traces_side[muscle].get("L"):
-            mean_l = np.mean(np.asarray(muscle_traces_side[muscle]["L"]), axis=0)
+            mean_l = fx.aggregate_cycles(muscle_traces_side[muscle]["L"], "pca")
         if muscle_traces_side[muscle].get("R"):
-            mean_r = np.mean(np.asarray(muscle_traces_side[muscle]["R"]), axis=0)
+            mean_r = fx.aggregate_cycles(muscle_traces_side[muscle]["R"], "pca")
+
+        # Outlier detection vs leave-one-out pooled PCA
+        corrs = []
+        mads = []
+        dissim = []
+        for i, item in enumerate(muscle_meta[muscle]):
+            t = item["trace"]
+            others = [m["trace"] for j, m in enumerate(muscle_meta[muscle]) if j != i]
+            if not others:
+                continue
+            loo_pca = fx.aggregate_cycles(others, "pca")
+            c0, _ = fx.cross_corr(t, loo_pca, max_lag=0)
+            mad0 = fx.mad_for_lag(t, loo_pca, 0)
+            corrs.append(c0)
+            mads.append(mad0)
+            item["corr_to_pooled"] = float(c0)
+            item["mad_to_pooled"] = float(mad0)
+        q = max(0.0, min(0.49, float(args.outlier_quantile)))
+        corr_thr = float(np.percentile(corrs, 100.0 * q)) if corrs else np.nan
+        mad_thr = float(np.percentile(mads, 100.0 * (1.0 - q))) if mads else np.nan
+        mad_med = float(np.median(mads)) if mads else np.nan
+        for item in muscle_meta[muscle]:
+            if "corr_to_pooled" not in item:
+                continue
+            mad0 = item["mad_to_pooled"]
+            score = (1.0 - item["corr_to_pooled"]) + (mad0 / (mad_med + 1e-8))
+            item["dissim"] = float(score)
+            dissim.append(score)
+        top_frac = max(0.0, min(1.0, float(args.outlier_top_frac)))
+        top_k = max(1, int(round(top_frac * max(1, len(dissim))))) if top_frac > 0 else 0
+        top_idx = set()
+        if dissim and top_k > 0:
+            order = np.argsort(-np.asarray(dissim))
+            top_idx = set(order[:top_k].tolist())
+        outliers = [
+            {
+                "sid": item["sid"],
+                "label": item["label"],
+                "side": item["side"],
+                "corr_to_pooled": item["corr_to_pooled"],
+                "mad_to_pooled": item["mad_to_pooled"],
+                "dissim": item.get("dissim", np.nan),
+            }
+            for i, item in enumerate(muscle_meta[muscle])
+            if (np.isfinite(corr_thr) and item.get("corr_to_pooled", np.inf) < corr_thr)
+            or (np.isfinite(mad_thr) and item.get("mad_to_pooled", -np.inf) > mad_thr)
+            or (i in top_idx)
+        ]
+        out["muscles"][muscle]["outliers"] = outliers
+        out["muscles"][muscle]["outlier_method"] = (
+            f"LOO PCA vs trace, corr<{q:.2f} or mad>{1.0-q:.2f} or top {top_frac:.2f} dissimilarity"
+        )
 
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
-        x = np.linspace(0, 100, mean.size)
+        x = np.linspace(0, 100, pooled_pca.size)
         fig = plt.figure(figsize=(10, 5))
         ax = plt.subplot(1, 1, 1)
-        for t in X:
-            ax.plot(x, t, color="0.6", alpha=0.15, linewidth=0.6)
-        ax.fill_between(x, mean - sd, mean + sd, color="C0", alpha=0.2, label="Pooled ±1 SD")
-        ax.plot(x, mean, color="C0", linewidth=2.0, label="Pooled mean")
+        outlier_idx = set()
+        for i, item in enumerate(muscle_meta[muscle]):
+            if "dissim" in item:
+                if item.get("corr_to_pooled", 1.0) < corr_thr or item.get("mad_to_pooled", 0.0) > mad_thr:
+                    outlier_idx.add(i)
+        for i, t in enumerate(X):
+            if i in outlier_idx:
+                ax.plot(x, t, color="0.35", alpha=0.30, linewidth=0.8, linestyle=":")
+            else:
+                ax.plot(x, t, color="0.6", alpha=0.20, linewidth=0.6)
+        ax.fill_between(x, pooled_pca - sd, pooled_pca + sd, color="C0", alpha=0.2, label="Pooled traces ±1 SD")
+        ax.plot(x, pooled_pca, color="C0", linewidth=2.0, label="Pooled PCA dim1")
         if mean_l is not None:
-            ax.plot(x, mean_l, color="C3", linestyle="--", linewidth=1.5, label="Left mean")
+            ax.plot(x, mean_l, color="C3", linestyle="--", linewidth=1.5, label="Left PCA dim1")
         if mean_r is not None:
-            ax.plot(x, mean_r, color="C2", linestyle="--", linewidth=1.5, label="Right mean")
-        ax.set_title(f"{muscle} (n_traces={len(traces)})")
+            ax.plot(x, mean_r, color="C2", linestyle="--", linewidth=1.5, label="Right PCA dim1")
+        ax.set_title(f"{muscle} (n_traces={len(traces)}, outliers={len(outliers)})")
         ax.set_xlabel("% stride")
         ax.set_ylabel("normalized EMG (a.u.)")
         ax.set_xlim(0, 100)
@@ -364,6 +437,9 @@ def main():
         fig.savefig(plot_dir / f"{muscle}.jpg", dpi=150)
         fig.savefig(plot_dir / f"{muscle}.pdf")
         plt.close(fig)
+    out_path = out_dir / f"global_muscle_stats_{fx.safe_slug(args.task)}.json"
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(out, f, indent=2)
 
     print(f"[done] wrote {out_path} (plots: {plot_dir})")
 
