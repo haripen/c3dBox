@@ -38,6 +38,7 @@ if parent_dir not in sys.path:
 # Import conversion functions
 from utils_py.mat2dict import loadmat_to_dict
 from utils_py.cycle_help import extract_cycle_periods, split_data_by_cycles
+from utils_py.emg_processing import process_semg_signal
 
 # Global logger (will be set by the UI)
 logger = print
@@ -114,7 +115,69 @@ def _labels_to_list(labels):
 # Conversion Functions for MAT Files
 # -------------------------------
 
-def process_mat_file(mat_path, cycles_from_to, show_keys=False):
+def _get_analog_rate(data_dict):
+    analog = data_dict.get("analog", {})
+    t = analog.get("time", None)
+    if t is not None:
+        arr = np.asarray(t, dtype=float).ravel()
+        if arr.size >= 2:
+            dt = float(np.nanmedian(np.diff(arr)))
+            if dt > 0:
+                return 1.0 / dt
+    meta = data_dict.get("meta", {})
+    if isinstance(meta, dict) and "analog_rate" in meta:
+        try:
+            return float(meta["analog_rate"])
+        except Exception:
+            return None
+    return None
+
+
+def _is_semg_label(label):
+    s = str(label).lower()
+    return ("emg" in s) and ("nfu" not in s)
+
+
+def _preprocess_semg(data_dict, semg_settings):
+    if not semg_settings or not semg_settings.get("enabled", True):
+        return
+    analog = data_dict.get("analog", {})
+    if not isinstance(analog, dict):
+        return
+    fs = _get_analog_rate(data_dict)
+    if fs is None or not np.isfinite(fs) or fs <= 0:
+        logger("Warning: could not determine analog sampling rate; skipping sEMG preprocessing.")
+        return
+    bp_low = float(semg_settings.get("bp_low", 10.0))
+    bp_high = float(semg_settings.get("bp_high", 490.0))
+    lp_cut = float(semg_settings.get("lp_cut", 15.0))
+    demean = bool(semg_settings.get("demean", True))
+    rectify = bool(semg_settings.get("rectify", True))
+    non_negative = bool(semg_settings.get("non_negative", True))
+    for key, arr in list(analog.items()):
+        if key in ("time", "frames"):
+            continue
+        if not _is_semg_label(key):
+            continue
+        try:
+            sig = np.asarray(arr, dtype=float)
+            proc = process_semg_signal(
+                sig,
+                fs,
+                bp_low=bp_low,
+                bp_high=bp_high,
+                lp_cut=lp_cut,
+                demean=demean,
+                rectify=rectify,
+                non_negative=non_negative,
+            )
+            if proc is not None:
+                analog[key] = proc
+        except Exception as e:
+            logger(f"Warning: sEMG preprocessing failed for {key}: {e}")
+
+
+def process_mat_file(mat_path, cycles_from_to, show_keys=False, semg_settings=None):
     """
     Process a single MAT file:
       - Loads the .mat file as a dictionary.
@@ -137,6 +200,8 @@ def process_mat_file(mat_path, cycles_from_to, show_keys=False):
         log_crash(f"Error loading {mat_path}: {e}")
         return False
     
+    _preprocess_semg(data_dict, semg_settings)
+
     event_times  = _to_1d_float_list(data_dict['events']['event_times'])
     event_labels = _labels_to_list(data_dict['events']['event_labels'])
     data_dict['events']['event_times']  = event_times
@@ -275,7 +340,7 @@ def find_mat_files(root_folder):
                 mat_files.append(os.path.join(dirpath, file))
     return mat_files
 
-def process_folder(source_root, output_root, cycles_from_to, show_keys=False):
+def process_folder(source_root, output_root, cycles_from_to, show_keys=False, semg_settings=None):
     """
     Process all .mat files in source_root recursively:
       - For each file, load and process the file.
@@ -290,7 +355,7 @@ def process_folder(source_root, output_root, cycles_from_to, show_keys=False):
     processed_count = 0
     for file_path in mat_files:
         try:
-            if process_mat_file(file_path, cycles_from_to, show_keys):
+            if process_mat_file(file_path, cycles_from_to, show_keys, semg_settings):
                 folder, filename = os.path.split(file_path)
                 base, ext = os.path.splitext(filename)
                 out_filename = base + "_splitCycles.mat"
@@ -376,6 +441,47 @@ class MainWindow(QtWidgets.QMainWindow):
         self.showKeysCheckBox.setToolTip("When checked, logs all available keys and event labels from the loaded MAT file at 9pt font size in the log window.")
         self.showKeysCheckBox.setChecked(False)
         layout.addWidget(self.showKeysCheckBox)
+
+        semgGroup = QtWidgets.QGroupBox("sEMG preprocessing (before split)")
+        semgLayout = QtWidgets.QGridLayout()
+        semgGroup.setLayout(semgLayout)
+
+        self.semgEnableCheck = QtWidgets.QCheckBox("Enable sEMG preprocessing")
+        self.semgEnableCheck.setChecked(True)
+        self.semgEnableCheck.setToolTip("Apply sEMG filtering before cycles are split.")
+        semgLayout.addWidget(self.semgEnableCheck, 0, 0, 1, 2)
+
+        bandpassGroup = QtWidgets.QGroupBox("Bandpass (Hz)")
+        bandpassLayout = QtWidgets.QHBoxLayout()
+        bandpassLayout.setSpacing(0)
+        bandpassGroup.setLayout(bandpassLayout)
+
+        self.semgBpLowEdit = QtWidgets.QLineEdit("10")
+        self.semgBpHighEdit = QtWidgets.QLineEdit("490")
+        self.semgBpLowEdit.setToolTip("Bandpass low cutoff (Hz)")
+        self.semgBpHighEdit.setToolTip("Bandpass high cutoff (Hz)")
+        self.semgBpLowEdit.setFixedWidth(60)
+        self.semgBpHighEdit.setFixedWidth(60)
+        bandpassLayout.addWidget(QtWidgets.QLabel("HPF"))
+        bandpassLayout.addWidget(self.semgBpLowEdit)
+        bandpassLayout.addSpacerItem(QtWidgets.QSpacerItem(12, 0, QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Minimum))
+        bandpassLayout.addWidget(QtWidgets.QLabel("LPF"))
+        bandpassLayout.addWidget(self.semgBpHighEdit)
+
+        lowpassGroup = QtWidgets.QGroupBox("Lowpass (Hz)")
+        lowpassLayout = QtWidgets.QHBoxLayout()
+        lowpassLayout.setSpacing(0)
+        lowpassGroup.setLayout(lowpassLayout)
+        self.semgLpEdit = QtWidgets.QLineEdit("15")
+        self.semgLpEdit.setToolTip("Lowpass (LPF) cutoff (Hz) for the envelope")
+        self.semgLpEdit.setFixedWidth(60)
+        lowpassLayout.addWidget(QtWidgets.QLabel("LPF"))
+        lowpassLayout.addWidget(self.semgLpEdit)
+
+        semgLayout.addWidget(bandpassGroup, 1, 0, 1, 3)
+        semgLayout.addWidget(lowpassGroup, 1, 3, 1, 3)
+
+        layout.addWidget(semgGroup)
         
         self.runButton = QtWidgets.QPushButton("Split MAT to Cycles")
         self.runButton.setStyleSheet("background-color: #007BFF; color: white; font-size: 16px;")
@@ -470,7 +576,21 @@ class MainWindow(QtWidgets.QMainWindow):
         logger = self.log
         show_keys = self.showKeysCheckBox.isChecked()
         self.log("Starting conversion...")
-        process_folder(source, output, self.cycles_from_to, show_keys)
+        semg_settings = {
+            "enabled": self.semgEnableCheck.isChecked(),
+            "demean": True,
+            "rectify": True,
+            "non_negative": True,
+        }
+        try:
+            semg_settings["bp_low"] = float(self.semgBpLowEdit.text().strip())
+            semg_settings["bp_high"] = float(self.semgBpHighEdit.text().strip())
+            semg_settings["lp_cut"] = float(self.semgLpEdit.text().strip())
+        except Exception:
+            QtWidgets.QMessageBox.warning(self, "Error", "Invalid sEMG filter settings.")
+            return
+
+        process_folder(source, output, self.cycles_from_to, show_keys, semg_settings)
         self.log("Conversion finished.")
 
 if __name__ == "__main__":
