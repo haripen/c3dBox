@@ -8,12 +8,11 @@ is_emg_key(k) -> bool
     True if a dict key represents an EMG channel (case-insensitive substring match).
 
 process_emg(signal, fs_analog) -> np.ndarray
-    Mean-remove -> 4th-order Butterworth band-pass (30–300 Hz, zero-phase)
-    -> full-wave rectify -> 4th-order Butterworth low-pass (6 Hz, zero-phase).
-    Returns the linear envelope with the same shape as input (1D).
+    Amplitude-normalize the raw signal using max(signal).
+    Returns a 1D array with the same shape as input.
 
 process_emg_dict(analog_dict, fs_analog) -> dict[str, np.ndarray]
-    Finds all EMG* channels in `analog_dict`, computes their envelopes,
+    Finds all EMG* channels in `analog_dict`, computes amplitude-normalized signals,
     caches results to avoid redundant re-processing, and
     adds each processed array back into `analog_dict` under "<key>_proc".
     Returns {original_key: processed_array}.
@@ -25,14 +24,6 @@ from typing import Dict, MutableMapping
 import hashlib
 
 import numpy as np
-from scipy.signal import butter, sosfiltfilt
-
-# Default filter specs
-_BP_LOW = 30.0     # Hz
-_BP_HIGH = 300.0   # Hz
-_ENV_LP = 6.0      # Hz
-_ORDER = 4         # Butterworth order
-
 # Name of the per-dict cache bucket
 _CACHE_KEY = "_emg_cache"
 
@@ -55,73 +46,21 @@ def _array_signature(x: np.ndarray) -> str:
     return f"{x.shape}|{x.dtype.str}|{h.hexdigest()}"
 
 
-def _design_bandpass(low_hz: float, high_hz: float, fs: float):
-    nyq = fs * 0.5
-    low = max(0.0, float(low_hz))
-    high = max(0.0, float(high_hz))
-
-    # Clamp to Nyquist with a small safety margin
-    high = min(high, nyq * 0.99)
-    if high <= 0:
-        raise ValueError("High cutoff must be > 0 after clamping to Nyquist.")
-
-    # Ensure low < high; if fs is small, degrade gracefully
-    if low >= high:
-        # If we cannot form a proper band, nudge low just below high
-        low = max(1e-6, 0.5 * high)
-
-    wn = [low / nyq, high / nyq]
-    return butter(_ORDER, wn, btype="bandpass", output="sos")
-
-
-def _design_lowpass(cut_hz: float, fs: float):
-    nyq = fs * 0.5
-    cut = max(1e-6, min(float(cut_hz), nyq * 0.99))
-    wn = cut / nyq
-    return butter(_ORDER, wn, btype="lowpass", output="sos")
-
-
-def _safe_sosfiltfilt(sos, x: np.ndarray) -> np.ndarray:
-    """
-    sosfiltfilt with a conservative padlen to avoid errors on short signals.
-    """
-    x = np.asarray(x)
-    if x.ndim != 1:
-        raise ValueError("process_emg expects a 1D array per channel.")
-
-    # Default padlen for filtfilt is 3 * (max(len(a), len(b)) - 1).
-    # For SOS, use a small multiple of the number of sections.
-    sections = sos.shape[0]
-    default_pad = 3 * (2 * sections)  # rough, stable for most cases
-    padlen = min(default_pad, max(0, x.size - 1))
-    if padlen <= 0:
-        # Too short to filter meaningfully; return zeros-like envelope
-        return np.zeros_like(x)
-    padlen = 0 # reset by HP
-    return sosfiltfilt(sos, x, padlen=padlen)
-
-
 def process_emg(signal: np.ndarray, fs_analog: float) -> np.ndarray:
     """
-    Process a raw EMG channel to a linear envelope.
-
-    Steps:
-      1) Remove mean
-      2) 4th-order Butterworth band-pass 30–300 Hz (zero-phase)
-      3) Full-wave rectify
-      4) 4th-order Butterworth low-pass 6 Hz (zero-phase)
+    Amplitude-normalize a raw EMG channel.
 
     Parameters
     ----------
     signal : np.ndarray
         1D signal.
     fs_analog : float
-        Sampling frequency [Hz] of the analog data.
+        Sampling frequency [Hz] of the analog data. (Unused here, kept for API compatibility.)
 
     Returns
     -------
     np.ndarray
-        Processed EMG (linear envelope), same length as `signal`.
+        Amplitude-normalized EMG, same length as `signal`.
     """
     if fs_analog is None or fs_analog <= 0:
         raise ValueError("fs_analog must be a positive float.")
@@ -130,7 +69,7 @@ def process_emg(signal: np.ndarray, fs_analog: float) -> np.ndarray:
     if x.ndim != 1:
         raise ValueError("process_emg expects a 1D array per channel.")
 
-    # Replace non-finite values to keep filters happy
+    # Replace non-finite values to keep normalization stable
     if not np.isfinite(x).all():
         finite_mask = np.isfinite(x)
         if not finite_mask.any():
@@ -139,24 +78,11 @@ def process_emg(signal: np.ndarray, fs_analog: float) -> np.ndarray:
         idx = np.arange(x.size)
         x[~finite_mask] = np.interp(idx[~finite_mask], idx[finite_mask], x[finite_mask])
 
-    # 1) Mean remove (use nanmean equivalently now that we removed NaNs)
-    x = x - float(x.mean())
-
-    # 2) Band-pass
-    sos_bp = _design_bandpass(_BP_LOW, _BP_HIGH, fs_analog)
-    x_bp = _safe_sosfiltfilt(sos_bp, x)
-
-    # 3) Rectify
-    x_rect = np.abs(x_bp)
-
-    # 4) Low-pass to get the envelope
-    sos_lp = _design_lowpass(_ENV_LP, fs_analog)
-    env = _safe_sosfiltfilt(sos_lp, x_rect)
-    
-    # 5) Normalize per cycle
-    env = env / np.max(env) * 100
-
-    return env
+    # Amplitude normalize using max(signal), per instructions.
+    max_val = float(np.max(x)) if x.size else 0.0
+    if max_val == 0.0:
+        return np.zeros_like(x)
+    return (x / max_val) * 100.0
 
 
 def process_emg_dict(analog_dict: MutableMapping, fs_analog: float) -> Dict[str, np.ndarray]:
@@ -164,7 +90,7 @@ def process_emg_dict(analog_dict: MutableMapping, fs_analog: float) -> Dict[str,
     Process and cache all EMG channels found in `analog_dict`.
 
     - Detects EMG keys via `is_emg_key`.
-    - Computes envelopes with `process_emg`.
+    - Computes amplitude-normalized signals with `process_emg`.
     - Caches results in `analog_dict[_emg_cache]` using a content hash and fs_analog.
     - Writes processed arrays back into `analog_dict` under "<key>_proc".
 

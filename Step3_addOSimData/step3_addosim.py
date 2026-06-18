@@ -222,6 +222,11 @@ def extract_core_for_key(filename: str, key: str) -> Optional[str]:
         stem = Path(fl).stem
         return stem[len(prefix):]
 
+    # For keys with no fixed suffix (e.g., IK, IK_filt) use stem (no extension).
+    if suffix == "":
+        stem = Path(fl).stem
+        return stem[len(prefix):]
+
     # Allow plural/singular SO suffixes
     if key == "SO_activation":
         suffixes = ["_StaticOptimization_activation.sto", "_StaticOptimization_activations.sto"]
@@ -234,10 +239,6 @@ def extract_core_for_key(filename: str, key: str) -> Optional[str]:
         suff_low = suff.lower()
         if fl_low.endswith(suff_low):
             return fl[len(prefix): len(fl) - len(suff)]
-    # For keys with no fixed suffix (e.g., IK, IK_filt) use stem
-    if suffix == "":
-        stem = Path(fl).stem
-        return stem[len(prefix):]
     return None
 
 def build_osim_index(osim_root: Path,

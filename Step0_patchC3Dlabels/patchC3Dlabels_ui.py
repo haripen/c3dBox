@@ -328,6 +328,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.analog_default = {}
         self.point_mutable = set()
         self.analog_mutable = set()
+        self._loaded_point_map = {}
+        self._loaded_analog_map = {}
         self._init_ui()
 
     def _init_ui(self):
@@ -428,6 +430,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def _cur_maps(self):
         pt_raw = self.table_point.export_mapping()
         an_raw = self.table_analog.export_mapping()
+        if not pt_raw and self._loaded_point_map:
+            pt_raw = dict(self._loaded_point_map)
+        if not an_raw and self._loaded_analog_map:
+            an_raw = dict(self._loaded_analog_map)
         return pt_raw, an_raw, self.point_mutable, self.analog_mutable
 
     def _save_map(self):
@@ -451,6 +457,8 @@ class MainWindow(QtWidgets.QMainWindow):
         an_raw = data.get('analog', {}).get('group_to_mostfrequent_raw', {})
         self.point_mutable = set(data.get('point', {}).get('mutable_groups', []))
         self.analog_mutable = set(data.get('analog', {}).get('mutable_groups', []))
+        self._loaded_point_map = dict(pt_raw) if pt_raw else {}
+        self._loaded_analog_map = dict(an_raw) if an_raw else {}
         if pt_raw: self.table_point.load_from_groups(self.inventory.point_groups, pt_raw)
         if an_raw: self.table_analog.load_from_groups(self.inventory.analog_groups, an_raw)
         self._log(f'Loaded mapping from {path}')
